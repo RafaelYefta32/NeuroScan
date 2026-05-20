@@ -24,12 +24,12 @@ export default function UserHome() {
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Button asChild size="lg" className="bg-gradient-primary shadow-glow hover:opacity-95">
-            <Link to="/app/classify">
+            <Link to="/user/classify">
               Start MRI Classification <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
           <Button asChild size="lg" variant="outline">
-            <Link to="/app/history">View history</Link>
+            <Link to="/user/history">View history</Link>
           </Button>
         </div>
       </section>

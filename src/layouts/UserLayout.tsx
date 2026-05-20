@@ -13,9 +13,9 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const links = [
-  { to: "/app", label: "Home", icon: Brain, end: true },
-  { to: "/app/classify", label: "Classify", icon: Upload },
-  { to: "/app/history", label: "History", icon: Clock },
+  { to: "/user", label: "Home", icon: Brain, end: true },
+  { to: "/user/classify", label: "Classify", icon: Upload },
+  { to: "/user/history", label: "History", icon: Clock },
 ];
 
 export default function UserLayout() {
@@ -31,7 +31,7 @@ export default function UserLayout() {
     <div className="min-h-screen bg-gradient-soft">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
         <div className="container flex h-16 items-center justify-between">
-          <Link to="/app" className="flex items-center gap-2.5">
+          <Link to="/user" className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
               <Brain className="h-5 w-5 text-primary-foreground" />
             </div>
@@ -71,7 +71,7 @@ export default function UserLayout() {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate("/app/profile")}>
+              <DropdownMenuItem onClick={() => navigate("/user/profile")}>
                 <User className="mr-2 h-4 w-4" /> Profile
               </DropdownMenuItem>
               <DropdownMenuSeparator />
