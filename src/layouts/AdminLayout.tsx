@@ -1,4 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard,
   Users,
@@ -35,6 +36,13 @@ const nav = [
 
 export default function AdminLayout() {
   const navigate = useNavigate();
+  const { profile, signOut } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/");
+  };
+
   return (
     <div className="flex min-h-screen w-full bg-muted/40">
       {/* Sidebar */}
@@ -70,12 +78,13 @@ export default function AdminLayout() {
         </nav>
 
         <div className="border-t border-sidebar-border p-3">
-          <Link
-            to="/app"
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent"
+          <Button
+            onClick={handleLogout}
+            variant="ghost"
+            className="w-full flex items-center justify-start gap-2 rounded-lg px-3 py-2 text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to user app
-          </Link>
+            <LogOut className="h-3.5 w-3.5" /> Sign out
+          </Button>
         </div>
       </aside>
 
@@ -97,11 +106,11 @@ export default function AdminLayout() {
                 <Button variant="ghost" className="gap-2 px-2">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
-                      AD
+                      {profile?.fullname?.substring(0, 2).toUpperCase() || "A"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="hidden text-left md:block">
-                    <div className="text-sm font-semibold leading-none">Admin</div>
+                    <div className="text-sm font-semibold leading-none">{profile?.fullname || "Admin"}</div>
                     <Badge variant="secondary" className="mt-1 h-4 px-1.5 text-[10px]">Super Admin</Badge>
                   </div>
                 </Button>
@@ -112,7 +121,7 @@ export default function AdminLayout() {
                 <DropdownMenuItem onClick={() => navigate("/admin/profile")}>
                   <User className="mr-2 h-4 w-4" /> Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/")}>
+                <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" /> Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>

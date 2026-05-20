@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Brain, Mail, Lock, Loader2, AlertCircle } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,9 +10,9 @@ import { Card } from "@/components/ui/card";
 
 export default function Login() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("dr.reyes@neuroscan.io");
-  const [password, setPassword] = useState("demopassword");
-  const [remember, setRemember] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,9 +24,43 @@ export default function Login() {
       return;
     }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 900));
-    setLoading(false);
-    navigate("/app");
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+
+      // Check role directly from public.users to redirect immediately
+      const { data: profileData, error: profileError } = await supabase
+        .from("users")
+        .select("role_id")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      if (!profileData) {
+        setError("Profil Anda tidak ditemukan atau pendaftaran sebelumnya belum tuntas. Silakan hubungi admin atau daftar ulang dengan email baru.");
+        setLoading(false);
+        // Supaya tidak nyangkut, kita paksa signout
+        await supabase.auth.signOut();
+        return;
+      }
+
+      if (profileData.role_id === 1) {
+        navigate("/admin");
+      } else {
+        navigate("/user");
+      }
+    } catch (err: any) {
+      setError("An unexpected error occurred.");
+      setLoading(false);
+    }
   };
 
   return (
@@ -73,9 +108,9 @@ export default function Login() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <a className="text-xs font-medium text-primary hover:underline cursor-pointer">
+                {/* <a className="text-xs font-medium text-primary hover:underline cursor-pointer">
                   Forgot password?
-                </a>
+                </a> */}
               </div>
               <div className="relative">
                 <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -91,7 +126,7 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-1">
+            {/* <div className="flex items-center gap-2 pt-1">
               <Checkbox
                 id="remember"
                 checked={remember}
@@ -100,7 +135,7 @@ export default function Login() {
               <Label htmlFor="remember" className="text-sm font-normal text-muted-foreground cursor-pointer">
                 Remember me
               </Label>
-            </div>
+            </div> */}
 
             <Button
               type="submit"

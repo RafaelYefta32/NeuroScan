@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { ArrowRight, Brain, FileScan, Shield, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -6,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import mri from "@/assets/mri-sample.jpg";
 
 export default function UserHome() {
+  const { profile } = useAuth();
+  
   return (
     <div className="space-y-12">
       {/* Hero */}
@@ -14,7 +17,7 @@ export default function UserHome() {
           <Sparkles className="mr-1 h-3 w-3" /> Model v3.2 · Active
         </Badge>
         <h1 className="font-display text-4xl font-bold leading-tight tracking-tight md:text-5xl">
-          Welcome back, Dr. Reyes.
+          Welcome back, {profile?.fullname || "User"}.
         </h1>
         <p className="mt-3 max-w-xl text-lg text-muted-foreground">
           Upload a brain MRI and receive an instant, evidence-backed classification with calibrated confidence.

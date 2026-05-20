@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Brain, Mail, Lock, User, Building2, Stethoscope, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,7 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [institution, setInstitution] = useState("");
   const [profession, setProfession] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -38,15 +40,44 @@ export default function Register() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError(null);
     const v = validate();
     setErrors(v);
     if (Object.keys(v).length) return;
-
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1100));
-    setLoading(false);
-    setSuccess(true);
-    setTimeout(() => navigate("/"), 1400);
+    
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        // Insert into public.users table
+        const { error: dbError } = await supabase.from("users").insert([
+          {
+            id: data.user.id,
+            role_id: 2, // 2 is user
+            fullname: fullName,
+            institution: institution || null,
+            profession: profession || null,
+          },
+        ]);
+
+        if (dbError) {
+          console.error("Error creating user profile:", dbError);
+        }
+
+        setSuccess(true);
+        setTimeout(() => navigate("/"), 2000);
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "Failed to register. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -73,6 +104,13 @@ export default function Register() {
             <div className="mb-4 flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-primary">
               <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" />
               <span>Account created. Redirecting to login…</span>
+            </div>
+          )}
+
+          {authError && (
+            <div className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span>{authError}</span>
             </div>
           )}
 

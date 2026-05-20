@@ -1,4 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { Brain, Upload, Clock, User, LogOut, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +20,13 @@ const links = [
 
 export default function UserLayout() {
   const navigate = useNavigate();
+  const { profile, signOut } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/");
+  };
+
   return (
     <div className="min-h-screen bg-gradient-soft">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
@@ -53,9 +61,11 @@ export default function UserLayout() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="gap-2 px-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-primary-soft text-primary text-xs font-semibold">DR</AvatarFallback>
+                  <AvatarFallback className="bg-primary-soft text-primary text-xs font-semibold">
+                    {profile?.fullname?.substring(0, 2).toUpperCase() || "U"}
+                  </AvatarFallback>
                 </Avatar>
-                <span className="hidden text-sm font-medium md:inline">Dr. Reyes</span>
+                <span className="hidden text-sm font-medium md:inline">{profile?.fullname || "User"}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
@@ -65,7 +75,7 @@ export default function UserLayout() {
                 <User className="mr-2 h-4 w-4" /> Profile
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate("/")}>
+              <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" /> Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>

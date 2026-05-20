@@ -1,3 +1,4 @@
+import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +7,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 
 export default function Profile() {
+  const { profile, user } = useAuth();
+  
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <header>
@@ -16,11 +19,13 @@ export default function Profile() {
       <Card className="p-6 md:p-8">
         <div className="flex items-center gap-4">
           <Avatar className="h-16 w-16">
-            <AvatarFallback className="bg-gradient-primary text-primary-foreground text-lg font-semibold">DR</AvatarFallback>
+            <AvatarFallback className="bg-gradient-primary text-primary-foreground text-lg font-semibold">
+              {profile?.fullname?.substring(0, 2).toUpperCase() || "U"}
+            </AvatarFallback>
           </Avatar>
           <div>
-            <div className="font-display text-lg font-semibold">Dr. Maria Reyes</div>
-            <div className="text-sm text-muted-foreground">Neuroradiologist · St. Luke's Medical</div>
+            <div className="font-display text-lg font-semibold">{profile?.fullname || "User"}</div>
+            <div className="text-sm text-muted-foreground">{profile?.profession || "User"} · {profile?.institution || "-"}</div>
           </div>
         </div>
 
@@ -29,22 +34,22 @@ export default function Profile() {
         <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>Full name</Label>
-              <Input defaultValue="Maria Reyes" />
-            </div>
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input defaultValue="dr.reyes@neuroscan.io" />
-            </div>
-            <div className="space-y-2">
-              <Label>Specialty</Label>
-              <Input defaultValue="Neuroradiology" />
-            </div>
-            <div className="space-y-2">
-              <Label>Institution</Label>
-              <Input defaultValue="St. Luke's Medical" />
-            </div>
-          </div>
+               <Label>Full name</Label>
+               <Input defaultValue={profile?.fullname || ""} />
+             </div>
+             <div className="space-y-2">
+               <Label>Email</Label>
+               <Input defaultValue={user?.email || ""} readOnly className="bg-muted" />
+             </div>
+             <div className="space-y-2">
+               <Label>Profession</Label>
+               <Input defaultValue={profile?.profession || ""} />
+             </div>
+             <div className="space-y-2">
+               <Label>Institution</Label>
+               <Input defaultValue={profile?.institution || ""} />
+             </div>
+           </div>
           <Button className="bg-gradient-primary hover:opacity-95">Save changes</Button>
         </form>
       </Card>

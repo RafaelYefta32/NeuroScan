@@ -1,3 +1,4 @@
+import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, FileScan, Cpu, TrendingUp, Activity } from "lucide-react";
@@ -35,6 +36,8 @@ const distribution = [
 ];
 
 export default function AdminDashboard() {
+  const { profile } = useAuth();
+  
   return (
     <div className="space-y-6">
       <div>
