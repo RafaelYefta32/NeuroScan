@@ -37,17 +37,24 @@ export default function Login() {
         return;
       }
 
-      // Check role directly from public.users to redirect immediately
       const { data: profileData, error: profileError } = await supabase
         .from("users")
-        .select("role_id")
+        .select("role_id, status")
         .eq("id", data.user.id)
         .maybeSingle();
 
       if (!profileData) {
-        setError("Profil Anda tidak ditemukan atau pendaftaran sebelumnya belum tuntas. Silakan hubungi admin atau daftar ulang dengan email baru.");
+        console.error("Profile lookup failed:", profileError);
+        setError(`Profil Anda tidak ditemukan di database. (Error: ${profileError?.message || "Diblokir oleh RLS / Data tidak ada"}). Silakan hubungi admin.`);
         setLoading(false);
         // Supaya tidak nyangkut, kita paksa signout
+        await supabase.auth.signOut();
+        return;
+      }
+
+      if (profileData.status === 'disabled') {
+        setError("Akun Anda telah dinonaktifkan oleh Admin. Silakan hubungi tim dukungan.");
+        setLoading(false);
         await supabase.auth.signOut();
         return;
       }

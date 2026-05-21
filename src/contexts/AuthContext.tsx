@@ -52,7 +52,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error fetching profile:', error.message);
         setProfile(null);
       } else {
-        setProfile(data as UserProfile);
+        const userProfile = data as UserProfile;
+        if (userProfile.status === 'disabled') {
+          console.warn('User is disabled. Forcing sign out.');
+          await supabase.auth.signOut();
+          setProfile(null);
+          setUser(null);
+          setSession(null);
+        } else {
+          setProfile(userProfile);
+        }
       }
     } catch (error) {
       console.error('Unexpected error fetching profile:', error);

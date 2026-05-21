@@ -1,7 +1,9 @@
-import { useAuth } from "@/contexts/AuthContext";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, FileScan, Cpu, TrendingUp, Activity } from "lucide-react";
+import { Users, FileScan, Cpu, TrendingUp, Activity, Loader2 } from "lucide-react";
+import { formatDistanceToNow, subDays, format } from "date-fns";
 import {
   Area,
   AreaChart,
@@ -16,28 +18,127 @@ import {
   Legend,
 } from "recharts";
 
-const stats = [
-  { label: "Total Users", value: "2,847", delta: "+12.4%", icon: Users },
-  { label: "Total Classifications", value: "48,219", delta: "+8.1%", icon: FileScan },
-  { label: "Active Model", value: "v3.2", delta: "98.4% acc", icon: Cpu },
-  { label: "Avg. Confidence", value: "92.7%", delta: "+1.2%", icon: TrendingUp },
-];
-
-const series = [
-  { d: "Mon", scans: 320 }, { d: "Tue", scans: 410 }, { d: "Wed", scans: 380 },
-  { d: "Thu", scans: 520 }, { d: "Fri", scans: 610 }, { d: "Sat", scans: 290 }, { d: "Sun", scans: 340 },
-];
-
-const distribution = [
-  { name: "Glioma", value: 38, color: "hsl(var(--primary))" },
-  { name: "Meningioma", value: 24, color: "hsl(var(--primary-glow))" },
-  { name: "Pituitary", value: 18, color: "hsl(var(--warning))" },
-  { name: "No tumor", value: 20, color: "hsl(var(--success))" },
-];
-
 export default function AdminDashboard() {
-  const { profile } = useAuth();
-  
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    users: 0,
+    classifications: 0,
+    activeModel: "None",
+    avgConfidence: 0,
+  });
+  const [series, setSeries] = useState<{ d: string; scans: number }[]>([]);
+  const [distribution, setDistribution] = useState<{ name: string; value: number; color: string }[]>([]);
+  const [recentLogs, setRecentLogs] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      try {
+        // 1. Fetch Users Count
+        const { count: usersCount } = await supabase
+          .from("users")
+          .select("*", { count: "exact", head: true });
+
+        // 2. Fetch Classifications Count & Avg Confidence
+        const { data: classData } = await supabase
+          .from("classification_results")
+          .select("confidence_score, predicted_class, created_at");
+
+        const totalScans = classData?.length || 0;
+        let avgConf = 0;
+        if (totalScans > 0) {
+          avgConf = classData!.reduce((acc, curr) => acc + curr.confidence_score, 0) / totalScans;
+        }
+
+        // 3. Fetch Active Model
+        const { data: modelData } = await supabase
+          .from("models")
+          .select("version, model_name")
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
+
+        setStats({
+          users: usersCount || 0,
+          classifications: totalScans,
+          activeModel: modelData ? `${modelData.model_name} (${modelData.version})` : "None",
+          avgConfidence: avgConf,
+        });
+
+        // 4. Calculate Distribution
+        if (classData) {
+          const distMap: Record<string, number> = {
+            "Glioma": 0,
+            "Meningioma": 0,
+            "Pituitary": 0,
+            "No Tumor": 0,
+          };
+          classData.forEach((c) => {
+            const cls = c.predicted_class === "No_Tumor" ? "No Tumor" : c.predicted_class;
+            if (distMap[cls] !== undefined) distMap[cls]++;
+            else distMap[cls] = 1;
+          });
+
+          setDistribution([
+            { name: "Glioma", value: distMap["Glioma"] || 0, color: "hsl(var(--destructive))" },
+            { name: "Meningioma", value: distMap["Meningioma"] || 0, color: "hsl(var(--primary-glow))" },
+            { name: "Pituitary", value: distMap["Pituitary"] || 0, color: "hsl(var(--warning))" },
+            { name: "No tumor", value: distMap["No Tumor"] || 0, color: "hsl(var(--success))" },
+          ].filter(d => d.value > 0)); // Only show if value > 0
+
+          // 5. Calculate Last 7 Days Series
+          const last7Days = Array.from({ length: 7 }).map((_, i) => {
+            const d = subDays(new Date(), 6 - i);
+            return {
+              dateStr: format(d, "yyyy-MM-dd"),
+              label: format(d, "EEE"),
+              scans: 0
+            };
+          });
+
+          classData.forEach(c => {
+            const dateStr = c.created_at.split('T')[0];
+            const dayObj = last7Days.find(d => d.dateStr === dateStr);
+            if (dayObj) dayObj.scans++;
+          });
+
+          setSeries(last7Days.map(d => ({ d: d.label, scans: d.scans })));
+        }
+
+        // 6. Fetch Recent Activity
+        const { data: logsData } = await supabase
+          .from("activity_logs")
+          .select("*, users(fullname)")
+          .order("created_at", { ascending: false })
+          .limit(5);
+        
+        setRecentLogs(logsData || []);
+
+      } catch (err) {
+        console.error("Dashboard error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  const statCards = [
+    { label: "Total Users", value: stats.users.toString(), delta: "Live", icon: Users },
+    { label: "Total Classifications", value: stats.classifications.toString(), delta: "Live", icon: FileScan },
+    { label: "Active Model", value: stats.activeModel, delta: "Production", icon: Cpu },
+    { label: "Avg. Confidence", value: `${(stats.avgConfidence * 100).toFixed(1)}%`, delta: "Live", icon: TrendingUp },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -46,7 +147,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((s) => (
+        {statCards.map((s) => (
           <Card key={s.label} className="p-5">
             <div className="flex items-start justify-between">
               <div>
@@ -87,15 +188,21 @@ export default function AdminDashboard() {
 
         <Card className="p-5">
           <h2 className="mb-4 font-display text-base font-semibold">Class distribution</h2>
-          <ResponsiveContainer width="100%" height={260}>
-            <PieChart>
-              <Pie data={distribution} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={3}>
-                {distribution.map((d) => <Cell key={d.name} fill={d.color} />)}
-              </Pie>
-              <Legend iconType="circle" />
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          {distribution.length === 0 ? (
+            <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">
+              No data available
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie data={distribution} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={3}>
+                  {distribution.map((d) => <Cell key={d.name} fill={d.color} />)}
+                </Pie>
+                <Legend iconType="circle" />
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
         </Card>
       </div>
 
@@ -104,19 +211,23 @@ export default function AdminDashboard() {
           <Activity className="h-4 w-4 text-primary" />
           <h2 className="font-display text-base font-semibold">Recent activity</h2>
         </div>
-        <ul className="divide-y divide-border text-sm">
-          {[
-            ["Dr. Reyes", "uploaded scan #A-1093", "2m ago"],
-            ["System", "promoted model v3.2 to active", "1h ago"],
-            ["Dr. Tan", "classified 4 scans", "3h ago"],
-            ["Admin", "disabled user account #u-441", "5h ago"],
-          ].map(([who, what, when]) => (
-            <li key={who + when} className="flex items-center justify-between py-3">
-              <span><span className="font-medium">{who}</span> <span className="text-muted-foreground">{what}</span></span>
-              <span className="text-xs text-muted-foreground">{when}</span>
-            </li>
-          ))}
-        </ul>
+        {recentLogs.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-4 text-center">No recent activity</div>
+        ) : (
+          <ul className="divide-y divide-border text-sm">
+            {recentLogs.map((log) => (
+              <li key={log.id} className="flex items-center justify-between py-3">
+                <span>
+                  <span className="font-medium">{log.users?.fullname || "System"}</span>{" "}
+                  <span className="text-muted-foreground">{log.activity} - {log.description}</span>
+                </span>
+                <span className="text-xs text-muted-foreground shrink-0 ml-4">
+                  {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
   );

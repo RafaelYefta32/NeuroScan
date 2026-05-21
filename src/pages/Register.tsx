@@ -59,7 +59,8 @@ export default function Register() {
         const { error: dbError } = await supabase.from("users").insert([
           {
             id: data.user.id,
-            role_id: 2, // 2 is user
+            role_id: 2, 
+            email: email,
             fullname: fullName,
             institution: institution || null,
             profession: profession || null,
