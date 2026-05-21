@@ -13,7 +13,7 @@ import {
   ArrowLeft,
   User,
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -105,6 +105,7 @@ export default function AdminLayout() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="gap-2 px-2">
                   <Avatar className="h-8 w-8">
+                    <AvatarImage src={profile?.profile_image || undefined} className="object-cover" />
                     <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
                       {profile?.fullname?.substring(0, 2).toUpperCase() || "A"}
                     </AvatarFallback>

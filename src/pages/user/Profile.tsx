@@ -1,23 +1,25 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Loader2 } from "lucide-react";
+import { Loader2, Camera, X } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Profile() {
   const { profile, user, refreshProfile } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Profile State
   const [fullname, setFullname] = useState("");
   const [profession, setProfession] = useState("");
   const [institution, setInstitution] = useState("");
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Password State
   const [newPassword, setNewPassword] = useState("");
@@ -55,6 +57,93 @@ export default function Profile() {
       toast.error(error.message || "Failed to update profile.");
     } finally {
       setLoadingProfile(false);
+    }
+  };
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploadingAvatar(true);
+      
+      if (!event.target.files || event.target.files.length === 0) {
+        throw new Error("You must select an image to upload.");
+      }
+      
+      if (!user) throw new Error("User not found.");
+
+      const file = event.target.files[0];
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${user.id}-${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // Upload image to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from("profile picture")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data } = supabase.storage.from("profile picture").getPublicUrl(filePath);
+      const publicUrl = data.publicUrl;
+
+      // Update profile in users table
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({ profile_image: publicUrl })
+        .eq("id", user.id);
+
+      if (updateError) throw updateError;
+
+      await refreshProfile();
+      toast.success("Profile picture updated!");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to upload avatar.");
+    } finally {
+      setUploadingAvatar(false);
+      // Reset input value so the same file can be selected again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    try {
+      setUploadingAvatar(true);
+      if (!profile?.profile_image || !user) return;
+
+      // Extract filename from URL
+      const fileName = profile.profile_image.split('/').pop();
+      if (fileName) {
+        const { error: deleteError } = await supabase.storage
+          .from("profile picture")
+          .remove([fileName]);
+        
+        if (deleteError) {
+          console.error("Failed to delete from storage:", deleteError);
+        }
+      }
+
+      // Update db
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({ profile_image: null })
+        .eq("id", user.id);
+
+      if (updateError) throw updateError;
+
+      await refreshProfile();
+      toast.success("Profile picture removed!");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to remove avatar.");
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -101,15 +190,47 @@ export default function Profile() {
       </header>
 
       <Card className="p-6 md:p-8">
-        <div className="flex items-center gap-4">
-          <Avatar className="h-16 w-16">
-            <AvatarFallback className="bg-gradient-primary text-primary-foreground text-lg font-semibold">
-              {profile?.fullname?.substring(0, 2).toUpperCase() || "U"}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <div className="font-display text-lg font-semibold">{profile?.fullname || "User"}</div>
-            <div className="text-sm text-muted-foreground">{profile?.profession || "User"} · {profile?.institution || "-"}</div>
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+          <div className="relative shrink-0">
+            <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
+              <Avatar className="h-24 w-24 transition-opacity group-hover:opacity-80 ring-4 ring-background shadow-sm">
+                <AvatarImage src={profile?.profile_image || undefined} className="object-cover" />
+                <AvatarFallback className="bg-gradient-primary text-primary-foreground text-2xl font-semibold">
+                  {profile?.fullname?.substring(0, 2).toUpperCase() || "U"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                {uploadingAvatar ? (
+                  <Loader2 className="h-6 w-6 text-white animate-spin" />
+                ) : (
+                  <Camera className="h-6 w-6 text-white" />
+                )}
+              </div>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept="image/*" 
+                onChange={handleFileChange}
+                disabled={uploadingAvatar}
+              />
+            </div>
+            
+            {profile?.profile_image && !uploadingAvatar && (
+              <button 
+                type="button"
+                onClick={handleRemoveAvatar}
+                className="absolute 0 right-0 top-0 rounded-full bg-destructive p-1.5 text-white shadow-sm transition-transform hover:scale-110 hover:bg-destructive/90"
+                title="Remove profile picture"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          
+          <div className="flex-1 text-center sm:text-left space-y-1 mt-2 sm:mt-4">
+            <div className="font-display text-2xl font-semibold tracking-tight">{profile?.fullname || "User"}</div>
+            <div className="text-sm text-muted-foreground font-medium">{profile?.profession || "User"} · {profile?.institution || "-"}</div>
           </div>
         </div>
 

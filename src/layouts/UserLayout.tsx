@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const links = [
   { to: "/user", label: "Home", icon: Brain, end: true },
@@ -61,6 +61,7 @@ export default function UserLayout() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="gap-2 px-2">
                 <Avatar className="h-8 w-8">
+                  <AvatarImage src={profile?.profile_image || undefined} className="object-cover" />
                   <AvatarFallback className="bg-primary-soft text-primary text-xs font-semibold">
                     {profile?.fullname?.substring(0, 2).toUpperCase() || "U"}
                   </AvatarFallback>
