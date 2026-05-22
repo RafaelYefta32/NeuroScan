@@ -1,17 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-
-// Tipe data profil dari database public.users
-export interface UserProfile {
-  id: string;
-  role_id: number;
-  fullname: string | null;
-  institution: string | null;
-  profession: string | null;
-  profile_image: string | null;
-  status: string;
-}
+import { userService, UserProfile } from '@/services/UserService';
+export type { UserProfile };
 
 interface AuthContextType {
   session: Session | null;
@@ -39,38 +30,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fungsi untuk mengambil data profil dari tabel public.users
   const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+    const userProfile = await userService.getProfile(userId);
 
-      if (error) {
-        console.error('Error fetching profile:', error.message);
-        setProfile(null);
-      } else {
-        const userProfile = data as UserProfile;
-        if (userProfile.status === 'disabled') {
-          console.warn('User is disabled. Forcing sign out.');
-          await supabase.auth.signOut();
-          setProfile(null);
-          setUser(null);
-          setSession(null);
-        } else {
-          setProfile(userProfile);
-        }
-      }
-    } catch (error) {
-      console.error('Unexpected error fetching profile:', error);
+    if (userProfile?.status === 'disabled') {
+      console.warn('[AuthContext] Akun dinonaktifkan. Memaksa sign out...');
+      await supabase.auth.signOut();
       setProfile(null);
+      setUser(null);
+      setSession(null);
+    } else {
+      setProfile(userProfile);
     }
   };
 
   useEffect(() => {
-    // Ambil session saat ini ketika aplikasi dimuat
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -81,7 +55,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // Dengarkan perubahan status autentikasi (login, logout, dll)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
@@ -99,14 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = async () => {
-    if (user) {
-      await supabase.from("activity_logs").insert([{
-        user_id: user.id,
-        activity: "User Logout",
-        description: "User logged out of the system"
-      }]);
-    }
-    await supabase.auth.signOut();
+    await userService.logout(user?.id);
   };
 
   const refreshProfile = async () => {
@@ -121,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile,
     loading,
     signOut,
-    refreshProfile
+    refreshProfile,
   };
 
   return (
@@ -130,3 +96,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     </AuthContext.Provider>
   );
 }
+

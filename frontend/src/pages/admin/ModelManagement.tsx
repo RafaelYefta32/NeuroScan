@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { modelService, ModelRecord } from "@/services/ModelService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -14,15 +14,6 @@ import { CheckCircle2, Plus, UploadCloud, Cpu, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { Progress } from "@/components/ui/progress";
 
-interface ModelRecord {
-  id: number;
-  model_name: string;
-  version: string;
-  file_path: string;
-  is_active: boolean;
-  created_at: string;
-}
-
 export default function ModelManagement() {
   const { user } = useAuth();
   const [models, setModels] = useState<ModelRecord[]>([]);
@@ -32,19 +23,14 @@ export default function ModelManagement() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [modelName, setModelName] = useState("");
-  const [modelVersion, setModelVersion] = useState("");
+  const [modelVersion, setModelVersion] = useState("");  
   const [modelFile, setModelFile] = useState<File | null>(null);
 
   const fetchModels = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("models")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setModels(data || []);
+      const data = await modelService.getModels();
+      setModels(data);
     } catch (err: any) {
       toast.error(err.message || "Failed to fetch models");
     } finally {
@@ -57,32 +43,10 @@ export default function ModelManagement() {
   }, []);
 
   const setActive = async (id: number) => {
+    if (!user) return;
     try {
-      await supabase.from("models").update({ is_active: false }).neq("id", 0);
-      
-      const { error } = await supabase.from("models").update({ is_active: true }).eq("id", id);
-      
-      if (error) throw error;
-      
-      try {
-        const response = await fetch("http://localhost:8000/reload", { method: "POST" });
-        if (!response.ok) {
-          console.warn("Backend reload failed", await response.text());
-          toast.warning("Database updated, but failed to reload model on the Python server.");
-        } else {
-          toast.success("Active model updated and loaded into memory!");
-        }
-      } catch (err) {
-        console.warn("Backend is offline or unreachable", err);
-        toast.warning("Database updated, but Python backend is unreachable.");
-      }
-
-      await supabase.from("activity_logs").insert([{
-        user_id: user?.id,
-        activity: "Model Activated",
-        description: `Model ID ${id} set to active`
-      }]);
-
+      await modelService.setActiveModel(id, user.id);
+      toast.success("Active model updated and loaded into memory!");
       await fetchModels();
     } catch (err: any) {
       toast.error(err.message || "Failed to set active model");
@@ -90,7 +54,7 @@ export default function ModelManagement() {
   };
 
   const handleUpload = async () => {
-    if (!modelName || !modelVersion || !modelFile) {
+    if (!modelName || !modelVersion || !modelFile || !user) {
       toast.error("Please fill all fields and select a file");
       return;
     }
@@ -98,59 +62,18 @@ export default function ModelManagement() {
     setUploading(true);
     setUploadProgress(0);
     try {
-      const uploadedFilePath = await new Promise<string>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", "http://localhost:8000/upload-model", true);
-        
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const percent = Math.round((e.loaded / e.total) * 100);
-            setUploadProgress(percent);
-          }
-        };
-        
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            const res = JSON.parse(xhr.responseText);
-            resolve(res.file_path);
-          } else {
-            console.error("Backend upload failed.", xhr.responseText);
-            reject(new Error(`Backend upload failed: ${xhr.responseText}`)); 
-          }
-        };
-        
-        xhr.onerror = () => {
-           console.error("Network error during backend upload.");
-           reject(new Error("Network error during backend upload. Is the Python server running?"));
-        };
-        
-        const formData = new FormData();
-        const safeVersion = modelVersion.replace(/[^a-zA-Z0-9.-]/g, '_');
-        formData.append("file", modelFile, `${safeVersion}-${modelFile.name}`);
-        xhr.send(formData);
+      await modelService.uploadModel({
+        modelName,
+        version: modelVersion,
+        file: modelFile,
+        adminId: user.id,
+        onProgress: (percent) => setUploadProgress(percent),
       });
-
-      const { error: dbError } = await supabase.from("models").insert([
-        {
-          model_name: modelName,
-          version: modelVersion,
-          file_path: uploadedFilePath,
-          admin_id: user?.id
-        }
-      ]);
-
-      if (dbError) throw dbError;
-
-      await supabase.from("activity_logs").insert([{
-        user_id: user?.id,
-        activity: "Model Uploaded",
-        description: `Uploaded new model ${modelName} ${modelVersion}`
-      }]);
 
       toast.success("Model uploaded successfully!");
       setOpen(false);
       fetchModels();
-      
+
       setModelName("");
       setModelVersion("");
       setModelFile(null);

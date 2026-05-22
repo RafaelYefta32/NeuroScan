@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Brain, Mail, Lock, Loader2, AlertCircle } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { userService } from "@/services/UserService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,55 +24,17 @@ export default function Login() {
       return;
     }
     setLoading(true);
-    
+
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { roleId } = await userService.login(email, password);
 
-      if (error) {
-        setError(error.message);
-        setLoading(false);
-        return;
-      }
-
-      const { data: profileData, error: profileError } = await supabase
-        .from("users")
-        .select("role_id, status")
-        .eq("id", data.user.id)
-        .maybeSingle();
-
-      if (!profileData) {
-        console.error("Profile lookup failed:", profileError);
-        setError(`Profil Anda tidak ditemukan di database. (Error: ${profileError?.message || "Diblokir oleh RLS / Data tidak ada"}). Silakan hubungi admin.`);
-        setLoading(false);
-        // Supaya tidak nyangkut, kita paksa signout
-        await supabase.auth.signOut();
-        return;
-      }
-
-      if (profileData.status === 'disabled') {
-        setError("Akun Anda telah dinonaktifkan oleh Admin. Silakan hubungi tim dukungan.");
-        setLoading(false);
-        await supabase.auth.signOut();
-        return;
-      }
-
-      // Log Activity
-      await supabase.from("activity_logs").insert([{
-        user_id: data.user.id,
-        activity: "User Login",
-        description: "User logged into the system"
-      }]);
-
-      if (profileData.role_id === 1) {
+      if (roleId === 1) {
         navigate("/admin");
       } else {
         navigate("/user");
       }
     } catch (err: any) {
-      setError("An unexpected error occurred.");
+      setError(err.message || "An unexpected error occurred.");
       setLoading(false);
     }
   };

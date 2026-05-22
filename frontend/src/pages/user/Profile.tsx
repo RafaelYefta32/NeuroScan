@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { userService } from "@/services/UserService";
 import { supabase } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,17 +39,7 @@ export default function Profile() {
 
     setLoadingProfile(true);
     try {
-      const { error } = await supabase
-        .from("users")
-        .update({
-          fullname,
-          profession,
-          institution,
-        })
-        .eq("id", user.id);
-
-      if (error) throw error;
-
+      await userService.updateProfile(user.id, { fullname, profession, institution });
       await refreshProfile();
       toast.success("Profile updated successfully!");
     } catch (error: any) {
@@ -65,36 +56,16 @@ export default function Profile() {
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setUploadingAvatar(true);
-      
+
       if (!event.target.files || event.target.files.length === 0) {
         throw new Error("You must select an image to upload.");
       }
-      
+
       if (!user) throw new Error("User not found.");
 
       const file = event.target.files[0];
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${user.id}-${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("profile picture")
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      const { data } = supabase.storage.from("profile picture").getPublicUrl(filePath);
-      const publicUrl = data.publicUrl;
-
-      const { error: updateError } = await supabase
-        .from("users")
-        .update({ profile_image: publicUrl })
-        .eq("id", user.id);
-
-      if (updateError) throw updateError;
-
+      await userService.uploadAvatar(user.id, file);
       await refreshProfile();
       toast.success("Profile picture updated!");
     } catch (error: any) {
@@ -112,24 +83,7 @@ export default function Profile() {
       setUploadingAvatar(true);
       if (!profile?.profile_image || !user) return;
 
-      const fileName = profile.profile_image.split('/').pop();
-      if (fileName) {
-        const { error: deleteError } = await supabase.storage
-          .from("profile picture")
-          .remove([fileName]);
-        
-        if (deleteError) {
-          console.error("Failed to delete from storage:", deleteError);
-        }
-      }
-
-      const { error: updateError } = await supabase
-        .from("users")
-        .update({ profile_image: null })
-        .eq("id", user.id);
-
-      if (updateError) throw updateError;
-
+      await userService.removeAvatar(user.id, profile.profile_image);
       await refreshProfile();
       toast.success("Profile picture removed!");
     } catch (error: any) {
@@ -158,12 +112,7 @@ export default function Profile() {
 
     setLoadingPassword(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-
-      if (error) throw error;
-
+      await userService.updatePassword(newPassword);
       toast.success("Password updated successfully!");
       setNewPassword("");
       setConfirmPassword("");

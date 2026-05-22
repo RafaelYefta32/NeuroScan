@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Search, Loader2, ImageOff } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { classificationService } from "@/services/ClassificationService";
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 
@@ -25,14 +25,8 @@ export default function History() {
     async function fetchHistory() {
       if (!user) return;
       try {
-        const { data, error } = await supabase
-          .from("classification_results")
-          .select("*, models(model_name, version)")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
-        setHistory(data || []);
+        const data = await classificationService.getHistory(user.id);
+        setHistory(data);
       } catch (err) {
         console.error("Failed to fetch history:", err);
       } finally {

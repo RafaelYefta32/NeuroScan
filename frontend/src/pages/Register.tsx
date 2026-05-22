@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Brain, Mail, Lock, User, Building2, Stethoscope, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { userService } from "@/services/UserService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,42 +45,18 @@ export default function Register() {
     setErrors(v);
     if (Object.keys(v).length) return;
     setLoading(true);
-    
+
     try {
-      const { data, error } = await supabase.auth.signUp({
+      await userService.register({
         email,
         password,
+        fullname: fullName,
+        institution: institution || undefined,
+        profession: profession || undefined,
       });
 
-      if (error) throw error;
-
-      if (data.user) {
-        // Insert into public.users table
-        const { error: dbError } = await supabase.from("users").insert([
-          {
-            id: data.user.id,
-            role_id: 2, 
-            email: email,
-            fullname: fullName,
-            institution: institution || null,
-            profession: profession || null,
-          },
-        ]);
-
-        if (dbError) {
-          console.error("Error creating user profile:", dbError);
-        } else {
-          // Log Activity
-          await supabase.from("activity_logs").insert([{
-            user_id: data.user.id,
-            activity: "User Registration",
-            description: "New user account created"
-          }]);
-        }
-
-        setSuccess(true);
-        setTimeout(() => navigate("/"), 2000);
-      }
+      setSuccess(true);
+      setTimeout(() => navigate("/"), 2000);
     } catch (err: any) {
       setAuthError(err.message || "Failed to register. Please try again.");
     } finally {
