@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { CheckCircle2, Plus, UploadCloud, Cpu, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import { Progress } from "@/components/ui/progress";
 
 interface ModelRecord {
   id: number;
@@ -28,8 +29,8 @@ export default function ModelManagement() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   
-  // Upload State
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [modelName, setModelName] = useState("");
   const [modelVersion, setModelVersion] = useState("");
   const [modelFile, setModelFile] = useState<File | null>(null);
@@ -57,15 +58,25 @@ export default function ModelManagement() {
 
   const setActive = async (id: number) => {
     try {
-      // 1. Set all models to inactive
       await supabase.from("models").update({ is_active: false }).neq("id", 0);
       
-      // 2. Set the chosen one to active
       const { error } = await supabase.from("models").update({ is_active: true }).eq("id", id);
       
       if (error) throw error;
       
-      // Log activity
+      try {
+        const response = await fetch("http://localhost:8000/reload", { method: "POST" });
+        if (!response.ok) {
+          console.warn("Backend reload failed", await response.text());
+          toast.warning("Database updated, but failed to reload model on the Python server.");
+        } else {
+          toast.success("Active model updated and loaded into memory!");
+        }
+      } catch (err) {
+        console.warn("Backend is offline or unreachable", err);
+        toast.warning("Database updated, but Python backend is unreachable.");
+      }
+
       await supabase.from("activity_logs").insert([{
         user_id: user?.id,
         activity: "Model Activated",
@@ -73,7 +84,6 @@ export default function ModelManagement() {
       }]);
 
       await fetchModels();
-      toast.success("Active model updated");
     } catch (err: any) {
       toast.error(err.message || "Failed to set active model");
     }
@@ -86,36 +96,51 @@ export default function ModelManagement() {
     }
 
     setUploading(true);
+    setUploadProgress(0);
     try {
-      // Create a unique file path
-      const filePath = `models/${Date.now()}-${modelFile.name}`;
+      const uploadedFilePath = await new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "http://localhost:8000/upload-model", true);
+        
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            setUploadProgress(percent);
+          }
+        };
+        
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const res = JSON.parse(xhr.responseText);
+            resolve(res.file_path);
+          } else {
+            console.error("Backend upload failed.", xhr.responseText);
+            reject(new Error(`Backend upload failed: ${xhr.responseText}`)); 
+          }
+        };
+        
+        xhr.onerror = () => {
+           console.error("Network error during backend upload.");
+           reject(new Error("Network error during backend upload. Is the Python server running?"));
+        };
+        
+        const formData = new FormData();
+        const safeVersion = modelVersion.replace(/[^a-zA-Z0-9.-]/g, '_');
+        formData.append("file", modelFile, `${safeVersion}-${modelFile.name}`);
+        xhr.send(formData);
+      });
 
-      // Upload file to Supabase Storage (assuming a 'models' bucket exists)
-      // Note: If bucket doesn't exist, this will fail. Admin needs to create it.
-      const { error: uploadError } = await supabase.storage
-        .from("models")
-        .upload(filePath, modelFile);
-
-      if (uploadError) {
-        // We will mock the DB insertion even if storage fails for demo purposes
-        // in case the user hasn't created the 'models' bucket yet.
-        console.warn("Storage upload failed (bucket might not exist). Proceeding with DB insert only.", uploadError);
-      }
-
-      // Insert into database
       const { error: dbError } = await supabase.from("models").insert([
         {
           model_name: modelName,
           version: modelVersion,
-          file_path: filePath,
-          is_active: models.length === 0, // Auto-active if it's the first model
+          file_path: uploadedFilePath,
           admin_id: user?.id
         }
       ]);
 
       if (dbError) throw dbError;
 
-      // Log activity
       await supabase.from("activity_logs").insert([{
         user_id: user?.id,
         activity: "Model Uploaded",
@@ -126,10 +151,10 @@ export default function ModelManagement() {
       setOpen(false);
       fetchModels();
       
-      // Reset form
       setModelName("");
       setModelVersion("");
       setModelFile(null);
+      setUploadProgress(0);
     } catch (err: any) {
       toast.error(err.message || "Failed to upload model");
     } finally {
@@ -187,6 +212,15 @@ export default function ModelManagement() {
                     onChange={(e) => setModelFile(e.target.files ? e.target.files[0] : null)}
                   />
                 </label>
+                {uploading && uploadProgress > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <div className="flex justify-between text-xs font-medium text-muted-foreground">
+                      <span>Uploading to Server...</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <Progress value={uploadProgress} className="h-1.5" />
+                  </div>
+                )}
               </div>
             </div>
             <DialogFooter>

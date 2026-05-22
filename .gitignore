@@ -7,10 +7,29 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Node / JS
 node_modules
 dist
 dist-ssr
 *.local
+.env*
+
+# Python Backend
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Deep Learning Models
+backend/models/*.keras
+backend/models/*.h5
+backend/models/*.pt
+backend/models/*.pth
 
 # Editor directories and files
 .vscode/*

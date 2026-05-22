@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { UploadCloud, Image as ImageIcon, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
 export default function Classify() {
   const [file, setFile] = useState<File | null>(null);
@@ -24,9 +26,108 @@ export default function Classify() {
     if (f) handleFile(f);
   };
 
-  const analyze = () => {
+  const analyze = async () => {
+    if (!file) return;
     setAnalyzing(true);
-    setTimeout(() => navigate("/app/result"), 1400);
+    
+    try {
+      const { data: models } = await supabase.from('models').select('*').eq('is_active', true).limit(1);
+      const activeModel = models && models.length > 0 ? models[0] : null;
+      const modelId = activeModel ? activeModel.id : null;
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+      
+      let imageUrl = null;
+      try {
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('scans')
+          .upload(fileName, file);
+          
+        if (uploadError) {
+          console.error("Failed to upload image to storage:", uploadError);
+        } else if (uploadData) {
+          const { data: publicUrlData } = supabase.storage.from('scans').getPublicUrl(fileName);
+          imageUrl = publicUrlData.publicUrl;
+        }
+      } catch (e) {
+        console.error("Storage bucket 'scans' might not exist or RLS is blocking:", e);
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const response = await fetch("http://localhost:8000/predict", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.detail || `Backend error: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      let dbRecordId = null;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userId = sessionData.session?.user?.id;
+        
+        if (userId) {
+          const { data: insertData, error: insertError } = await supabase.from('classification_results').insert([
+            {
+              user_id: userId,
+              model_id: modelId,
+              image_mri: imageUrl || "https://via.placeholder.com/150",
+              predicted_class: result.predicted_class,
+              confidence_score: result.confidence_score,
+              explanation: JSON.stringify(result.all_scores)
+            }
+          ]).select();
+          
+          if (insertError) {
+            console.error("Supabase Insert Error:", insertError);
+            toast.error(`Database Error: ${insertError.message}`);
+          }
+          
+          if (!insertError && insertData) {
+            dbRecordId = insertData[0].id;
+            
+            await supabase.from("activity_logs").insert([{
+              user_id: userId,
+              activity: "MRI Scan Upload",
+              description: `Uploaded an MRI scan. Predicted: ${result.predicted_class}`
+            }]);
+          }
+        } else {
+           console.warn("No user ID found, skipping DB insert.");
+        }
+      } catch (e) {
+        console.error("Failed to save to classification_results:", e);
+        toast.error("An unexpected error occurred while saving to database.");
+      }
+
+      toast.success("Analysis complete!");
+      
+      navigate("/user/result", { 
+        state: { 
+          resultData: {
+            predicted_class: result.predicted_class,
+            confidence_score: result.confidence_score,
+            all_scores: result.all_scores,
+            image_url: imageUrl || preview,
+            created_at: new Date().toISOString()
+          } 
+        } 
+      });
+
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to analyze image.");
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   return (

@@ -6,6 +6,4 @@ pydantic
 python-dotenv
 numpy
 Pillow
-# Add tensorflow or torch here later when integrating the ML model
-# tensorflow
-# torch
+tensorflow

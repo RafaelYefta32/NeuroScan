@@ -1,30 +1,36 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation, Navigate } from "react-router-dom";
 import { ArrowLeft, Download, AlertTriangle, Activity, Stethoscope, BookOpen, Brain, MapPin, Microscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import mri from "@/assets/mri-sample.jpg";
+import { format } from "date-fns";
 
 export default function Details() {
-  const prediction = {
-    label: "Glioma",
-    confidence: 94,
-    scannedAt: "May 7, 2026 · 10:42 AM",
-  };
+  const location = useLocation();
+  const resultData = location.state?.resultData;
 
-  const probabilities = [
-    { name: "Glioma", v: 94 },
-    { name: "Meningioma", v: 4 },
-    { name: "Pituitary", v: 1.5 },
-    { name: "No tumor", v: 0.5 },
-  ];
+  if (!resultData) {
+    return <Navigate to="/user/history" replace />;
+  }
+
+  const { predicted_class, confidence_score, all_scores, image_url, created_at } = resultData;
+  const formattedClass = predicted_class.charAt(0).toUpperCase() + predicted_class.slice(1);
+  const confidencePercent = Math.round(confidence_score * 100);
+
+  const scannedAt = created_at 
+    ? format(new Date(created_at), "MMM d, yyyy · HH:mm")
+    : "Just now";
+  const probabilities = Object.entries(all_scores || {})
+    .map(([key, val]) => ({ name: key.charAt(0).toUpperCase() + key.slice(1), v: Math.round((val as number) * 100) }))
+    .sort((a, b) => b.v - a.v);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 animate-fade-in">
       <Link
-        to="/app/result"
+        to="/user/result"
+        state={{ resultData }}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" /> Back to result
@@ -37,17 +43,17 @@ export default function Details() {
             <Badge className="bg-white/20 text-primary-foreground hover:bg-white/20">
               Detailed report
             </Badge>
-            <h1 className="mt-3 font-display text-4xl font-bold">{prediction.label}</h1>
+            <h1 className="mt-3 font-display text-4xl font-bold">{formattedClass}</h1>
             <p className="mt-2 max-w-xl text-sm text-primary-foreground/80">
               In-depth interpretation of the MRI scan analysis, including tumor characteristics,
               clinical context, and recommended next steps.
             </p>
             <div className="mt-4 flex flex-wrap gap-2 text-xs">
-              <span className="rounded-full bg-white/15 px-3 py-1">Confidence {prediction.confidence}%</span>
-              <span className="rounded-full bg-white/15 px-3 py-1">{prediction.scannedAt}</span>
+              <span className="rounded-full bg-white/15 px-3 py-1">Confidence {confidencePercent}%</span>
+              <span className="rounded-full bg-white/15 px-3 py-1">{scannedAt}</span>
             </div>
           </div>
-          <Button size="lg" variant="secondary" className="shrink-0">
+          <Button size="lg" variant="secondary" className="shrink-0" onClick={() => window.print()}>
             <Download className="mr-2 h-4 w-4" /> Download Report
           </Button>
         </div>
@@ -57,9 +63,9 @@ export default function Details() {
         {/* Image + classes */}
         <div className="space-y-6 lg:col-span-2">
           <Card className="overflow-hidden">
-            <img src={mri} alt="MRI scan" className="w-full bg-black object-contain" />
+            <img src={image_url || ""} alt="MRI scan" className="w-full max-h-[400px] bg-black object-contain" />
             <div className="p-4 text-xs text-muted-foreground">
-              Highlighted region indicates the area with strongest activation by the model.
+              Analyzed region indicating potential abnormalities.
             </div>
           </Card>
 
@@ -84,13 +90,13 @@ export default function Details() {
           <Card className="p-6">
             <div className="flex items-center gap-2">
               <Brain className="h-5 w-5 text-primary" />
-              <h3 className="font-display text-lg font-semibold">About Glioma</h3>
+              <h3 className="font-display text-lg font-semibold">About {formattedClass}</h3>
             </div>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              Gliomas are tumors that originate from glial cells in the brain or spinal cord.
-              They represent one of the most common types of primary brain tumors and can range
-              from low-grade (slow growing) to high-grade (aggressive). Accurate identification
-              and grading are essential to guide treatment planning.
+              {predicted_class.toLowerCase() === "glioma" && "Gliomas are tumors that originate from glial cells in the brain or spinal cord. They represent one of the most common types of primary brain tumors and can range from low-grade (slow growing) to high-grade (aggressive)."}
+              {predicted_class.toLowerCase() === "meningioma" && "Meningiomas are typically slow-growing tumors that form from the meninges, the membranous layers surrounding the brain and spinal cord. They are usually benign but can cause symptoms by pressing on adjacent brain tissue."}
+              {predicted_class.toLowerCase() === "pituitary" && "Pituitary tumors are abnormal growths that develop in your pituitary gland. Some pituitary tumors result in too many of the hormones that regulate important functions of your body, while others can cause your pituitary gland to produce lower levels of hormones."}
+              {(predicted_class.toLowerCase() === "notumor" || predicted_class.toLowerCase() === "no tumor") && "No significant tumor structures were detected in this MRI scan. The tissue appears to be within normal parameters based on the model's analysis."}
             </p>
           </Card>
 
@@ -100,14 +106,14 @@ export default function Details() {
               <h3 className="font-display text-lg font-semibold">Tumor characteristics</h3>
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Detail icon={<Brain className="h-4 w-4" />} label="Predicted class" value={prediction.label} />
-              <Detail icon={<Activity className="h-4 w-4" />} label="Confidence" value={`${prediction.confidence}%`} />
-              <Detail icon={<Stethoscope className="h-4 w-4" />} label="Origin" value="Glial cell origin" />
-              <Detail icon={<MapPin className="h-4 w-4" />} label="Scan date" value={prediction.scannedAt} />
+              <Detail icon={<Brain className="h-4 w-4" />} label="Predicted class" value={formattedClass} />
+              <Detail icon={<Activity className="h-4 w-4" />} label="Confidence" value={`${confidencePercent}%`} />
+              <Detail icon={<Stethoscope className="h-4 w-4" />} label="Origin" value={predicted_class.toLowerCase() === "notumor" ? "N/A" : "Unknown"} />
+              <Detail icon={<MapPin className="h-4 w-4" />} label="Scan date" value={scannedAt} />
             </div>
             <Separator className="my-5" />
             <p className="text-sm leading-relaxed text-muted-foreground">
-              The model classifies this scan as <strong>{prediction.label}</strong> with a confidence of {prediction.confidence}%.
+              The model classifies this scan as <strong>{formattedClass}</strong> with a confidence of {confidencePercent}%.
               This classification is based on patterns the model learned from training data.
               It does not determine tumor grade, exact location, size, or invasiveness.
               Further clinical evaluation and imaging by a radiologist are essential.

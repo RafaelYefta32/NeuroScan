@@ -99,6 +99,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    if (user) {
+      await supabase.from("activity_logs").insert([{
+        user_id: user.id,
+        activity: "User Logout",
+        description: "User logged out of the system"
+      }]);
+    }
     await supabase.auth.signOut();
   };
 

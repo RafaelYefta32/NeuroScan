@@ -69,6 +69,13 @@ export default function Register() {
 
         if (dbError) {
           console.error("Error creating user profile:", dbError);
+        } else {
+          // Log Activity
+          await supabase.from("activity_logs").insert([{
+            user_id: data.user.id,
+            activity: "User Registration",
+            description: "New user account created"
+          }]);
         }
 
         setSuccess(true);

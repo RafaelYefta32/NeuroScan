@@ -14,14 +14,12 @@ export default function Profile() {
   const { profile, user, refreshProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Profile State
   const [fullname, setFullname] = useState("");
   const [profession, setProfession] = useState("");
   const [institution, setInstitution] = useState("");
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  // Password State
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loadingPassword, setLoadingPassword] = useState(false);
@@ -79,7 +77,6 @@ export default function Profile() {
       const fileName = `${user.id}-${Math.random()}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      // Upload image to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from("profile picture")
         .upload(filePath, file, { upsert: true });
@@ -88,11 +85,9 @@ export default function Profile() {
         throw uploadError;
       }
 
-      // Get public URL
       const { data } = supabase.storage.from("profile picture").getPublicUrl(filePath);
       const publicUrl = data.publicUrl;
 
-      // Update profile in users table
       const { error: updateError } = await supabase
         .from("users")
         .update({ profile_image: publicUrl })
@@ -106,7 +101,6 @@ export default function Profile() {
       toast.error(error.message || "Failed to upload avatar.");
     } finally {
       setUploadingAvatar(false);
-      // Reset input value so the same file can be selected again
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -118,7 +112,6 @@ export default function Profile() {
       setUploadingAvatar(true);
       if (!profile?.profile_image || !user) return;
 
-      // Extract filename from URL
       const fileName = profile.profile_image.split('/').pop();
       if (fileName) {
         const { error: deleteError } = await supabase.storage
@@ -130,7 +123,6 @@ export default function Profile() {
         }
       }
 
-      // Update db
       const { error: updateError } = await supabase
         .from("users")
         .update({ profile_image: null })

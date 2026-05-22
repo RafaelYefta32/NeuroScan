@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MoreHorizontal, Search, Plus, Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,13 +38,13 @@ interface DBUser {
 }
 
 export default function UserManagement() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<DBUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("any");
 
-  // Edit Modal State
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<DBUser | null>(null);
   const [saving, setSaving] = useState(false);
@@ -54,7 +55,6 @@ export default function UserManagement() {
     role_id: 2,
   });
 
-  // Add User Modal State
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [addingUser, setAddingUser] = useState(false);
   const [addForm, setAddForm] = useState({
@@ -87,7 +87,7 @@ export default function UserManagement() {
     fetchUsers();
   }, []);
 
-  const handleToggleStatus = async (id: string, currentStatus: string) => {
+  const handleToggleStatus = async (id: string, currentStatus: string, userFullName: string | null) => {
     const newStatus = currentStatus === "active" ? "disabled" : "active";
     try {
       const { error } = await supabase
@@ -95,7 +95,17 @@ export default function UserManagement() {
         .update({ status: newStatus })
         .eq("id", id);
       if (error) throw error;
+      
       setUsers(users.map((u) => (u.id === id ? { ...u, status: newStatus } : u)));
+      
+      if (currentUser) {
+        await supabase.from("activity_logs").insert([{
+          user_id: currentUser.id,
+          activity: "User Status Changed",
+          description: `Changed status of user ${userFullName || id} to ${newStatus}`
+        }]);
+      }
+      
       toast.success(`User status updated to ${newStatus}`);
     } catch (err: any) {
       toast.error(err.message || "Failed to update status");
@@ -153,7 +163,6 @@ export default function UserManagement() {
 
     setAddingUser(true);
     try {
-      // 1. Create a temporary, isolated Supabase client so we don't overwrite the Admin's session
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       
@@ -164,7 +173,6 @@ export default function UserManagement() {
         }
       });
 
-      // 2. Sign up the new user
       const { data: authData, error: authError } = await tempClient.auth.signUp({
         email: addForm.email,
         password: addForm.password,
@@ -173,7 +181,6 @@ export default function UserManagement() {
       if (authError) throw authError;
 
       if (authData.user) {
-        // 3. Insert profile into public.users using the tempClient (which is now logged in as the new user)
         const { error: dbError } = await tempClient.from("users").insert([
           {
             id: authData.user.id,
@@ -328,7 +335,7 @@ export default function UserManagement() {
                           <DropdownMenuItem onClick={() => openEditModal(u)}>
                             Edit user
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleToggleStatus(u.id, u.status || "active")}>
+                          <DropdownMenuItem onClick={() => handleToggleStatus(u.id, u.status || "active", u.fullname)}>
                             {u.status === "active" ? "Disable user" : "Enable user"}
                           </DropdownMenuItem>
                         </DropdownMenuContent>

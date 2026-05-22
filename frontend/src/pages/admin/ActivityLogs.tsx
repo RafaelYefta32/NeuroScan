@@ -60,7 +60,7 @@ export default function ActivityLogs() {
           )
         `)
         .order("created_at", { ascending: false })
-        .limit(50); // Get latest 50 logs
+        .limit(50); 
 
       if (error) throw error;
       setLogs(data || []);

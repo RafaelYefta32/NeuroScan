@@ -34,12 +34,10 @@ export default function AdminDashboard() {
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        // 1. Fetch Users Count
         const { count: usersCount } = await supabase
           .from("users")
           .select("*", { count: "exact", head: true });
 
-        // 2. Fetch Classifications Count & Avg Confidence
         const { data: classData } = await supabase
           .from("classification_results")
           .select("confidence_score, predicted_class, created_at");
@@ -50,7 +48,6 @@ export default function AdminDashboard() {
           avgConf = classData!.reduce((acc, curr) => acc + curr.confidence_score, 0) / totalScans;
         }
 
-        // 3. Fetch Active Model
         const { data: modelData } = await supabase
           .from("models")
           .select("version, model_name")
@@ -65,7 +62,6 @@ export default function AdminDashboard() {
           avgConfidence: avgConf,
         });
 
-        // 4. Calculate Distribution
         if (classData) {
           const distMap: Record<string, number> = {
             "Glioma": 0,
@@ -84,9 +80,8 @@ export default function AdminDashboard() {
             { name: "Meningioma", value: distMap["Meningioma"] || 0, color: "hsl(var(--primary-glow))" },
             { name: "Pituitary", value: distMap["Pituitary"] || 0, color: "hsl(var(--warning))" },
             { name: "No tumor", value: distMap["No Tumor"] || 0, color: "hsl(var(--success))" },
-          ].filter(d => d.value > 0)); // Only show if value > 0
+          ].filter(d => d.value > 0));
 
-          // 5. Calculate Last 7 Days Series
           const last7Days = Array.from({ length: 7 }).map((_, i) => {
             const d = subDays(new Date(), 6 - i);
             return {
@@ -105,7 +100,6 @@ export default function AdminDashboard() {
           setSeries(last7Days.map(d => ({ d: d.label, scans: d.scans })));
         }
 
-        // 6. Fetch Recent Activity
         const { data: logsData } = await supabase
           .from("activity_logs")
           .select("*, users(fullname)")

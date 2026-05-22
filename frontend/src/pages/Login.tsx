@@ -59,6 +59,13 @@ export default function Login() {
         return;
       }
 
+      // Log Activity
+      await supabase.from("activity_logs").insert([{
+        user_id: data.user.id,
+        activity: "User Login",
+        description: "User logged into the system"
+      }]);
+
       if (profileData.role_id === 1) {
         navigate("/admin");
       } else {
