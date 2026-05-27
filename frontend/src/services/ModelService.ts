@@ -12,6 +12,7 @@ export interface ModelRecord {
   file_path: string;
   is_active: boolean;
   created_at: string;
+  users?: { fullname: string | null } | null;
 }
 
 export interface UploadModelParams {
@@ -117,7 +118,7 @@ class ModelService {
   async getModels(): Promise<ModelRecord[]> {
     const { data, error } = await supabase
       .from("models")
-      .select("*")
+      .select("*, users(fullname)")
       .order("created_at", { ascending: false });
 
     if (error) throw new Error(error.message);

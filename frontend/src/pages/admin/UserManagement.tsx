@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MoreHorizontal, Search, Plus, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { PaginationBar } from "@/components/ui/pagination-bar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -66,6 +67,8 @@ export default function UserManagement() {
     role_id: 2,
   });
 
+  const [currentPage, setCurrentPage] = useState(1);
+
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -86,6 +89,11 @@ export default function UserManagement() {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  // Reset ke halaman 1 saat filter/search berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, roleFilter, statusFilter]);
 
   const handleToggleStatus = async (id: string, currentStatus: string, userFullName: string | null) => {
     const newStatus = currentStatus === "active" ? "disabled" : "active";
@@ -229,6 +237,13 @@ export default function UserManagement() {
     return matchesSearch && matchesRole && matchesStatus;
   });
 
+  const PAGE_SIZE = 10;
+  const totalPages = Math.ceil(filteredUsers.length / PAGE_SIZE);
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -294,7 +309,7 @@ export default function UserManagement() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredUsers.map((u) => (
+                paginatedUsers.map((u) => (
                   <TableRow key={u.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -347,6 +362,17 @@ export default function UserManagement() {
             </TableBody>
           </Table>
         </div>
+
+        {/* Pagination */}
+        {!loading && filteredUsers.length > 0 && (
+          <PaginationBar
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredUsers.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setCurrentPage}
+          />
+        )}
       </Card>
 
       {/* Edit User Modal */}

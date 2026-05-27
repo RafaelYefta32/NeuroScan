@@ -1,5 +1,8 @@
+import { useState, useEffect } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { formatDistanceToNow } from "date-fns";
 import {
   LayoutDashboard,
   Users,
@@ -12,6 +15,7 @@ import {
   Brain,
   ArrowLeft,
   User,
+  Check,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -34,13 +38,69 @@ const nav = [
   { to: "/admin/models", label: "Model Management", icon: Cpu },
 ];
 
+interface NotificationLog {
+  id: number;
+  activity: string;
+  description: string;
+  created_at: string;
+  users?: { fullname: string } | null;
+}
+
 export default function AdminLayout() {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
+  
+  const [notifications, setNotifications] = useState<NotificationLog[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchRecentLogs = async (isInitial = false) => {
+    try {
+      const { data, error } = await supabase
+        .from("activity_logs")
+        .select("*, users(fullname)")
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+      setNotifications(data || []);
+      
+      if (isInitial) {
+        setUnreadCount(0);
+      }
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecentLogs(true);
+
+    const channel = supabase
+      .channel("admin-notifications")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "activity_logs" },
+        () => {
+          fetchRecentLogs();
+          setUnreadCount((prev) => prev + 1);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const handleLogout = async () => {
     await signOut();
     navigate("/");
+  };
+
+  const handleOpenNotifications = (open: boolean) => {
+    if (open) {
+      setUnreadCount(0);
+    }
   };
 
   return (
@@ -97,10 +157,66 @@ export default function AdminLayout() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-4 w-4" />
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive" />
-            </Button>
+            {/* Notification Dropdown */}
+            <DropdownMenu onOpenChange={handleOpenNotifications}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative">
+                  <Bell className="h-4 w-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute right-1 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground animate-pulse">
+                      {unreadCount}
+                    </span>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 p-0">
+                <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                  <span className="font-display text-sm font-semibold">Notifications</span>
+                  {unreadCount > 0 && (
+                    <Badge variant="secondary" className="bg-primary/10 text-primary">
+                      {unreadCount} new
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="max-h-[300px] overflow-y-auto divide-y divide-border">
+                  {notifications.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-muted-foreground">
+                      No notifications yet
+                    </div>
+                  ) : (
+                    notifications.map((notif) => (
+                      <div key={notif.id} className="p-3 text-xs hover:bg-muted/40 transition-colors">
+                        <div className="flex justify-between font-medium">
+                          <span className="truncate max-w-[180px]">
+                            {notif.users?.fullname || "System"}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
+                            {formatDistanceToNow(new Date(notif.created_at), { addSuffix: true })}
+                          </span>
+                        </div>
+                        <div className="mt-1 font-semibold text-foreground/90">
+                          {notif.activity}
+                        </div>
+                        <div className="mt-0.5 text-muted-foreground break-words">
+                          {notif.description}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <DropdownMenuSeparator className="m-0" />
+                <DropdownMenuItem
+                  className="w-full justify-center text-xs text-primary font-medium py-2.5 cursor-pointer focus:bg-muted/50"
+                  onClick={() => navigate("/admin/logs")}
+                >
+                  View all logs
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Profile Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="gap-2 px-2">
@@ -137,3 +253,4 @@ export default function AdminLayout() {
     </div>
   );
 }
+

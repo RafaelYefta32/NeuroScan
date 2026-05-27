@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LogIn, Upload, UserCog, Cpu, AlertTriangle, Loader2, Activity } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { PaginationBar } from "@/components/ui/pagination-bar";
 
 interface ActivityLog {
   id: number;
@@ -12,9 +13,7 @@ interface ActivityLog {
   activity: string;
   description: string;
   created_at: string;
-  users?: {
-    fullname: string;
-  };
+  users?: { fullname: string };
 }
 
 const getIconForActivity = (activity: string) => {
@@ -37,30 +36,27 @@ const getToneForActivity = (activity: string): string => {
 };
 
 const dot: Record<string, string> = {
-  primary: "bg-primary-soft text-primary",
-  success: "bg-success/15 text-success",
-  warning: "bg-warning/15 text-warning",
+  primary:     "bg-primary-soft text-primary",
+  success:     "bg-success/15 text-success",
+  warning:     "bg-warning/15 text-warning",
   destructive: "bg-destructive/15 text-destructive",
-  muted: "bg-muted text-muted-foreground",
+  muted:       "bg-muted text-muted-foreground",
 };
+
+const PAGE_SIZE = 10;
 
 export default function ActivityLogs() {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchLogs = async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("activity_logs")
-        .select(`
-          *,
-          users (
-            fullname
-          )
-        `)
-        .order("created_at", { ascending: false })
-        .limit(50); 
+        .select("*, users(fullname)")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       setLogs(data || []);
@@ -75,11 +71,24 @@ export default function ActivityLogs() {
     fetchLogs();
   }, []);
 
+  // Reset ke halaman 1 jika data berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [logs.length]);
+
+  const totalPages = Math.ceil(logs.length / PAGE_SIZE);
+  const paginated = logs.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Activity Logs</h1>
-        <p className="text-sm text-muted-foreground">Chronological audit of system and user activity.</p>
+        <p className="text-sm text-muted-foreground">
+          Chronological audit of system and user activity.
+        </p>
       </div>
 
       <Card className="p-6">
@@ -92,34 +101,50 @@ export default function ActivityLogs() {
             No activity logs found.
           </div>
         ) : (
-          <ol className="relative space-y-6 border-l border-border pl-6">
-            {logs.map((log) => {
-              const Icon = getIconForActivity(log.activity);
-              const tone = getToneForActivity(log.activity);
-              
-              return (
-                <li key={log.id} className="relative">
-                  <span className={`absolute -left-[34px] flex h-8 w-8 items-center justify-center rounded-full ${dot[tone]}`}>
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="font-medium">
-                        {log.users?.fullname || "System"} 
-                        <span className="ml-2 font-normal text-muted-foreground">
-                          {log.activity}
-                        </span>
+          <>
+            <ol className="relative space-y-6 border-l border-border pl-6">
+              {paginated.map((log) => {
+                const Icon = getIconForActivity(log.activity);
+                const tone = getToneForActivity(log.activity);
+
+                return (
+                  <li key={log.id} className="relative">
+                    <span
+                      className={`absolute -left-[34px] flex h-8 w-8 items-center justify-center rounded-full ${dot[tone]}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="font-medium">
+                          {log.users?.fullname || "System"}
+                          <span className="ml-2 font-normal text-muted-foreground">
+                            {log.activity}
+                          </span>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {log.description}
+                        </div>
                       </div>
-                      <div className="text-sm text-muted-foreground">{log.description}</div>
+                      <Badge variant="outline" className="text-xs">
+                        {formatDistanceToNow(new Date(log.created_at), {
+                          addSuffix: true,
+                        })}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className="text-xs">
-                      {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
-                    </Badge>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
+                  </li>
+                );
+              })}
+            </ol>
+
+            <PaginationBar
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={logs.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setCurrentPage}
+            />
+          </>
         )}
       </Card>
     </div>
