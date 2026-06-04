@@ -80,7 +80,7 @@ export default function Classify() {
               <UploadCloud className="h-8 w-8" />
             </div>
             <h3 className="mt-4 font-display text-lg font-semibold">Drag & drop your MRI scan</h3>
-            <p className="mt-1 text-sm text-muted-foreground">or click to browse · JPG, PNG, DICOM up to 25MB</p>
+            <p className="mt-1 text-sm text-muted-foreground">or click to browse · JPG, PNG up to 25MB</p>
             <input
               ref={inputRef}
               type="file"

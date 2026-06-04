@@ -14,7 +14,7 @@ from entities.model_entity import ModelEntity
 logger = logging.getLogger(__name__)
 
 CLASS_LABELS = ["glioma", "meningioma", "notumor", "pituitary"]
-IMAGE_SIZE = (224, 224)
+DEFAULT_IMAGE_SIZE = (224, 224)
 LOCAL_MODEL_DIR = "models"
 FALLBACK_MODEL_PATH = "models/efficientnetB0.keras"
 
@@ -23,6 +23,7 @@ class ModelService:
 
     def __init__(self, supabase_client=None):
         self._current_model = None
+        self._image_size = DEFAULT_IMAGE_SIZE
         self._supabase = supabase_client
         self._tf_available = self._check_tensorflow()
 
@@ -77,7 +78,11 @@ class ModelService:
                         self._current_model = tf.keras.models.load_model(
                             active_record.file_path
                         )
-                        logger.info("Model aktif berhasil dimuat ke memori!")
+                        self._set_image_size_from_model()
+                        logger.info(
+                            "Model aktif berhasil dimuat ke memori! "
+                            f"Ukuran input: {self._image_size}"
+                        )
                         return True
                     else:
                         logger.warning(
@@ -92,7 +97,11 @@ class ModelService:
         try:
             if os.path.exists(FALLBACK_MODEL_PATH):
                 self._current_model = tf.keras.models.load_model(FALLBACK_MODEL_PATH)
-                logger.info("Model fallback lokal berhasil dimuat!")
+                self._set_image_size_from_model()
+                logger.info(
+                    "Model fallback lokal berhasil dimuat! "
+                    f"Ukuran input: {self._image_size}"
+                )
                 return True
             else:
                 logger.warning(f"Model fallback tidak ditemukan di: {FALLBACK_MODEL_PATH}")
@@ -103,10 +112,44 @@ class ModelService:
 
     def _preprocess_image(self, image_bytes: bytes) -> np.ndarray:
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        img = img.resize(IMAGE_SIZE)
+        img = img.resize(self._image_size or DEFAULT_IMAGE_SIZE)
         img_array = np.array(img)
         img_array = np.expand_dims(img_array, axis=0)
         return img_array
+
+    def _set_image_size_from_model(self) -> None:
+        if self._current_model is None:
+            return
+
+        try:
+            input_shape = self._current_model.input_shape
+            if isinstance(input_shape, list):
+                input_shape = input_shape[0]
+
+            if input_shape is None:
+                raise ValueError("Input shape tidak tersedia")
+
+            shape = [dim for dim in input_shape if dim is not None]
+            if len(shape) == 2:
+                height, width = shape
+            elif len(shape) == 3:
+                if shape[0] in (1, 3):
+                    _, height, width = input_shape[1:]
+                else:
+                    height, width = shape[0], shape[1]
+            else:
+                height, width = DEFAULT_IMAGE_SIZE
+
+            if height is None or width is None:
+                raise ValueError("Dimensi input model tidak lengkap")
+
+            self._image_size = (int(width), int(height))
+        except Exception as e:
+            logger.warning(
+                f"Gagal menentukan ukuran input model secara otomatis: {e}. "
+                f"Menggunakan default {DEFAULT_IMAGE_SIZE}"
+            )
+            self._image_size = DEFAULT_IMAGE_SIZE
 
     def predict_image(self, image_bytes: bytes) -> dict:
         if self._current_model is None:

@@ -4,16 +4,19 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
+import { printMedicalReport } from "@/utils/reportGenerator";
 
 export default function Result() {
   const location = useLocation();
+  const { profile, user } = useAuth();
   const resultData = location.state?.resultData;
 
   if (!resultData) {
     return <Navigate to="/user/classify" replace />;
   }
 
-  const { predicted_class, confidence_score, all_scores, image_url } = resultData;
+  const { predicted_class, confidence_score, all_scores, image_url, created_at } = resultData;
   const confidencePercent = Math.round(confidence_score * 100);
 
   const formattedClass = predicted_class.charAt(0).toUpperCase() + predicted_class.slice(1);
@@ -21,6 +24,19 @@ export default function Result() {
   const sortedScores = Object.entries(all_scores || {})
     .map(([key, val]) => ({ name: key.charAt(0).toUpperCase() + key.slice(1), v: Math.round((val as number) * 100) }))
     .sort((a, b) => b.v - a.v);
+
+  const handleDownloadReport = () => {
+    printMedicalReport({
+      predictedClass: formattedClass,
+      confidenceScore: confidence_score,
+      allScores: all_scores || {},
+      imageMri: image_url || "",
+      createdAt: created_at,
+      userName: profile?.fullname || "Clinical Clinician",
+      userEmail: user?.email || "-",
+    });
+  };
+
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -68,7 +84,10 @@ export default function Result() {
           </div>
 
           <div className="mt-6 flex gap-2">
-            <Button className="flex-1 bg-gradient-primary hover:opacity-95" onClick={() => window.print()}>
+            <Button
+              className="flex-1 bg-gradient-primary hover:opacity-95"
+              onClick={handleDownloadReport}
+            >
               <Download className="mr-2 h-4 w-4" /> Download Report
             </Button>
             <Button asChild variant="outline" className="flex-1">
@@ -80,3 +99,4 @@ export default function Result() {
     </div>
   );
 }
+

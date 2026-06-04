@@ -6,9 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
+import { generateClinicalExplanation, printMedicalReport, getClinicalSymptoms, getClinicalNextSteps } from "@/utils/reportGenerator";
+
 
 export default function Details() {
   const location = useLocation();
+  const { profile, user } = useAuth();
   const resultData = location.state?.resultData;
 
   if (!resultData) {
@@ -25,6 +29,17 @@ export default function Details() {
   const probabilities = Object.entries(all_scores || {})
     .map(([key, val]) => ({ name: key.charAt(0).toUpperCase() + key.slice(1), v: Math.round((val as number) * 100) }))
     .sort((a, b) => b.v - a.v);
+
+  const reportPayload = {
+    predictedClass: formattedClass,
+    confidenceScore: confidence_score,
+    allScores: all_scores || {},
+    imageMri: image_url || "",
+    createdAt: created_at,
+    userName: profile?.fullname || "Clinical Clinician",
+    userEmail: user?.email || "-",
+  };
+
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 animate-fade-in">
@@ -53,11 +68,17 @@ export default function Details() {
               <span className="rounded-full bg-white/15 px-3 py-1">{scannedAt}</span>
             </div>
           </div>
-          <Button size="lg" variant="secondary" className="shrink-0" onClick={() => window.print()}>
+          <Button
+            size="lg"
+            variant="secondary"
+            className="shrink-0"
+            onClick={() => printMedicalReport(reportPayload)}
+          >
             <Download className="mr-2 h-4 w-4" /> Download Report
           </Button>
         </div>
       </Card>
+
 
       <div className="grid gap-6 lg:grid-cols-5">
         {/* Image + classes */}
@@ -92,13 +113,14 @@ export default function Details() {
               <Brain className="h-5 w-5 text-primary" />
               <h3 className="font-display text-lg font-semibold">About {formattedClass}</h3>
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              {predicted_class.toLowerCase() === "glioma" && "Gliomas are tumors that originate from glial cells in the brain or spinal cord. They represent one of the most common types of primary brain tumors and can range from low-grade (slow growing) to high-grade (aggressive)."}
-              {predicted_class.toLowerCase() === "meningioma" && "Meningiomas are typically slow-growing tumors that form from the meninges, the membranous layers surrounding the brain and spinal cord. They are usually benign but can cause symptoms by pressing on adjacent brain tissue."}
-              {predicted_class.toLowerCase() === "pituitary" && "Pituitary tumors are abnormal growths that develop in your pituitary gland. Some pituitary tumors result in too many of the hormones that regulate important functions of your body, while others can cause your pituitary gland to produce lower levels of hormones."}
-              {(predicted_class.toLowerCase() === "notumor" || predicted_class.toLowerCase() === "no tumor") && "No significant tumor structures were detected in this MRI scan. The tissue appears to be within normal parameters based on the model's analysis."}
-            </p>
+            <div 
+              className="mt-3"
+              dangerouslySetInnerHTML={{ 
+                __html: generateClinicalExplanation(reportPayload) 
+              }} 
+            />
           </Card>
+
 
           <Card className="p-6">
             <div className="flex items-center gap-2">
@@ -126,14 +148,7 @@ export default function Details() {
               <h3 className="font-display text-lg font-semibold">Common symptoms</h3>
             </div>
             <ul className="mt-3 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-              {[
-                "Persistent headaches, often worse in the morning",
-                "Seizures (new onset in adults)",
-                "Cognitive or personality changes",
-                "Motor weakness on one side of the body",
-                "Speech or language difficulties",
-                "Nausea and vomiting",
-              ].map((s) => (
+              {getClinicalSymptoms(predicted_class).map((s) => (
                 <li key={s} className="flex gap-2">
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                   {s}
@@ -148,12 +163,7 @@ export default function Details() {
               <h3 className="font-display text-lg font-semibold">Recommended next steps</h3>
             </div>
             <ol className="mt-3 space-y-3 text-sm text-muted-foreground">
-              {[
-                "Share this report with a qualified neurologist or neuro-oncologist for clinical review.",
-                "Confirm findings with contrast-enhanced MRI or advanced sequences (MRS, perfusion).",
-                "Discuss biopsy or surgical consultation to establish definitive histopathology.",
-                "Evaluate treatment options: surgery, radiotherapy, and/or chemotherapy as indicated.",
-              ].map((s, i) => (
+              {getClinicalNextSteps(predicted_class).map((s, i) => (
                 <li key={s} className="flex gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                     {i + 1}
@@ -163,6 +173,7 @@ export default function Details() {
               ))}
             </ol>
           </Card>
+
 
           <Card className="border-warning/40 bg-warning/5 p-6">
             <div className="flex items-start gap-3">

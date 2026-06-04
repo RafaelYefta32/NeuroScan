@@ -30,13 +30,10 @@ class ClassificationService:
         user_id: str,
         model_id: Optional[int] = None,
     ) -> ClassificationResult:
-        # Langkah 1: Upload gambar ke Supabase Storage
         image_url = self._upload_scan_to_storage(image_bytes, filename)
 
-        # Langkah 2: Jalankan prediksi
         prediction = self._model_service.predict_image(image_bytes)
 
-        # Langkah 3: Simpan hasil ke Supabase
         result = self._save_result_to_db(
             user_id=user_id,
             model_id=model_id,

@@ -7,6 +7,7 @@ import { Search, Loader2, ImageOff } from "lucide-react";
 import { classificationService } from "@/services/ClassificationService";
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
+import { PaginationBar } from "@/components/ui/pagination-bar";
 
 const toneClass = (result: string) => {
   const t = result.toLowerCase();
@@ -15,11 +16,14 @@ const toneClass = (result: string) => {
   return "bg-warning/15 text-warning";
 };
 
+const PAGE_SIZE = 5;
+
 export default function History() {
   const { user } = useAuth();
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     async function fetchHistory() {
@@ -36,9 +40,20 @@ export default function History() {
     fetchHistory();
   }, [user]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
   const filtered = history.filter(h => 
     h.predicted_class.toLowerCase().includes(search.toLowerCase())
   );
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -66,39 +81,50 @@ export default function History() {
             <p>No scans found.</p>
           </Card>
         ) : (
-          filtered.map((it) => {
-            const formattedClass = it.predicted_class.charAt(0).toUpperCase() + it.predicted_class.slice(1);
-            const conf = Math.round(it.confidence_score * 100);
-            
-            const resultState = {
-              predicted_class: it.predicted_class,
-              confidence_score: it.confidence_score,
-              all_scores: it.explanation ? JSON.parse(it.explanation) : {},
-              image_url: it.image_mri,
-              created_at: it.created_at
-            };
+          <>
+            {paginated.map((it) => {
+              const formattedClass = it.predicted_class.charAt(0).toUpperCase() + it.predicted_class.slice(1);
+              const conf = Math.round(it.confidence_score * 100);
+              
+              const resultState = {
+                predicted_class: it.predicted_class,
+                confidence_score: it.confidence_score,
+                all_scores: it.explanation ? JSON.parse(it.explanation) : {},
+                image_url: it.image_mri,
+                created_at: it.created_at
+              };
 
-            return (
-              <Link key={it.id} to="/user/result" state={{ resultData: resultState }}>
-                <Card className="flex items-center gap-4 p-4 transition-smooth hover:shadow-soft hover:-translate-y-0.5">
-                  <img src={it.image_mri || ""} alt="" loading="lazy" className="h-16 w-16 shrink-0 rounded-xl bg-black object-cover" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-display text-lg font-semibold">{formattedClass}</span>
-                      <Badge className={toneClass(it.predicted_class)}>{conf}%</Badge>
+              return (
+                <Link key={it.id} to="/user/result" state={{ resultData: resultState }}>
+                  <Card className="flex items-center gap-4 p-4 transition-smooth hover:shadow-soft hover:-translate-y-0.5">
+                    <img src={it.image_mri || ""} alt="" loading="lazy" className="h-16 w-16 shrink-0 rounded-xl bg-black object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-display text-lg font-semibold">{formattedClass}</span>
+                        <Badge className={toneClass(it.predicted_class)}>{conf}%</Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {format(new Date(it.created_at), "MMM d, yyyy · HH:mm")} 
+                        {it.models && ` · Model: ${it.models.model_name}`}
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {format(new Date(it.created_at), "MMM d, yyyy · HH:mm")} 
-                      {it.models && ` · Model: ${it.models.model_name}`}
-                    </div>
-                  </div>
-                  <span className="text-sm text-primary">View →</span>
-                </Card>
-              </Link>
-            );
-          })
+                    <span className="text-sm text-primary">View →</span>
+                  </Card>
+                </Link>
+              );
+            })}
+
+            <PaginationBar
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setCurrentPage}
+            />
+          </>
         )}
       </div>
+
     </div>
   );
 }

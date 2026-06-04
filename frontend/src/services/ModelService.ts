@@ -15,6 +15,11 @@ export interface ModelRecord {
   users?: { fullname: string | null } | null;
 }
 
+export interface ModelStatistics {
+  total_predictions: number;
+  average_confidence: number;
+}
+
 export interface UploadModelParams {
   modelName: string;
   version: string;
@@ -139,6 +144,30 @@ class ModelService {
     }
 
     return data as ModelRecord | null;
+  }
+
+  async getModelStatistics(modelId: number): Promise<ModelStatistics> {
+    const { data, error } = await supabase
+      .from("classification_results")
+      .select("id, confidence_score")
+      .eq("model_id", modelId);
+
+    if (error) {
+      console.error("[ModelService] Gagal mengambil statistik model:", error.message);
+      return { total_predictions: 0, average_confidence: 0 };
+    }
+
+    const results = data || [];
+    const total_predictions = results.length;
+
+    const average_confidence = total_predictions > 0
+      ? results.reduce((sum, r: any) => sum + r.confidence_score, 0) / total_predictions
+      : 0;
+
+    return {
+      total_predictions,
+      average_confidence: Math.round(average_confidence * 100) / 100
+    };
   }
 }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { modelService, ModelRecord } from "@/services/ModelService";
+import { modelService, ModelRecord, ModelStatistics } from "@/services/ModelService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
-import { CheckCircle2, Plus, UploadCloud, Cpu, Loader2, FileText, CalendarDays, HardDrive, Hash, User } from "lucide-react";
+import { CheckCircle2, Plus, UploadCloud, Cpu, Loader2, FileText, CalendarDays, HardDrive, Hash, User, Zap, TrendingUp } from "lucide-react";
 
 import { format } from "date-fns";
 import { Progress } from "@/components/ui/progress";
@@ -25,9 +25,12 @@ export default function ModelManagement() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [modelName, setModelName] = useState("");
-  const [modelVersion, setModelVersion] = useState("");  
+  const [modelVersion, setModelVersion] = useState("");
   const [modelFile, setModelFile] = useState<File | null>(null);
   const [detailModel, setDetailModel] = useState<ModelRecord | null>(null);
+  const [fileError, setFileError] = useState<string>("");
+  const [modelStats, setModelStats] = useState<ModelStatistics | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   const fetchModels = async () => {
     setLoading(true);
@@ -44,6 +47,23 @@ export default function ModelManagement() {
   useEffect(() => {
     fetchModels();
   }, []);
+
+  const fetchModelStats = async (modelId: number) => {
+    setStatsLoading(true);
+    try {
+      const stats = await modelService.getModelStatistics(modelId);
+      setModelStats(stats);
+    } catch (err: any) {
+      console.error("Failed to fetch model stats:", err);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  const handleOpenDetails = (model: ModelRecord) => {
+    setDetailModel(model);
+    fetchModelStats(model.id);
+  };
 
   const setActive = async (id: number) => {
     if (!user) return;
@@ -72,6 +92,24 @@ export default function ModelManagement() {
   };
 
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files ? e.target.files[0] : null;
+    setFileError("");
+
+    if (file) {
+      const validExtensions = [".keras", ".h5"];
+      const fileExtension = "." + file.name.split(".").pop()?.toLowerCase();
+
+      if (!validExtensions.includes(fileExtension)) {
+        setFileError("Only .keras and .h5 files are allowed");
+        setModelFile(null);
+        return;
+      }
+    }
+
+    setModelFile(file);
+  };
+
   const handleUpload = async () => {
     if (!modelName || !modelVersion || !modelFile || !user) {
       toast.error("Please fill all fields and select a file");
@@ -97,6 +135,7 @@ export default function ModelManagement() {
       setModelVersion("");
       setModelFile(null);
       setUploadProgress(0);
+      setFileError("");
     } catch (err: any) {
       toast.error(err.message || "Failed to upload model");
     } finally {
@@ -112,7 +151,16 @@ export default function ModelManagement() {
           <p className="text-sm text-muted-foreground">Upload, version and activate classification models.</p>
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(newOpen) => {
+          setOpen(newOpen);
+          if (!newOpen) {
+            setModelName("");
+            setModelVersion("");
+            setModelFile(null);
+            setFileError("");
+            setUploadProgress(0);
+          }
+        }}>
           <DialogTrigger asChild>
             <Button className="bg-gradient-primary hover:opacity-95">
               <Plus className="mr-2 h-4 w-4" /> Upload model
@@ -142,18 +190,26 @@ export default function ModelManagement() {
               </div>
               <div className="space-y-2">
                 <Label>Model file</Label>
-                <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border px-6 py-8 text-center hover:border-primary/50 hover:bg-muted/40">
+                <label className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors ${
+                  fileError
+                    ? "border-red-500 bg-red-50"
+                    : "border-border hover:border-primary/50 hover:bg-muted/40"
+                }`}>
                   <UploadCloud className="mb-2 h-6 w-6 text-primary" />
                   <span className="text-sm font-medium">
                     {modelFile ? modelFile.name : "Click to select"}
                   </span>
-                  <span className="text-xs text-muted-foreground">Up to 500MB</span>
-                  <input 
-                    type="file" 
-                    className="hidden" 
-                    onChange={(e) => setModelFile(e.target.files ? e.target.files[0] : null)}
+                  <span className="text-xs text-muted-foreground">Only .keras or .h5 — up to 500MB</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".keras,.h5"
+                    onChange={handleFileChange}
                   />
                 </label>
+                {fileError && (
+                  <p className="text-xs text-red-500 font-medium">{fileError}</p>
+                )}
                 {uploading && uploadProgress > 0 && (
                   <div className="mt-4 space-y-2">
                     <div className="flex justify-between text-xs font-medium text-muted-foreground">
@@ -231,7 +287,7 @@ export default function ModelManagement() {
                 >
                   {m.is_active ? "Currently active" : "Set Active"}
                 </Button>
-                <Button variant="outline" onClick={() => setDetailModel(m)}>Details</Button>
+                <Button variant="outline" onClick={() => handleOpenDetails(m)}>Details</Button>
               </div>
             </Card>
           ))}
@@ -297,6 +353,30 @@ export default function ModelManagement() {
                   </div>
                   <div className="font-mono text-xs break-all">{detailModel.file_path}</div>
                 </div>
+
+                {statsLoading ? (
+                  <div className="rounded-xl bg-muted/40 p-3">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">Loading statistics...</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-muted/40 p-3">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                        <Zap className="h-3.5 w-3.5" /> Predictions
+                      </div>
+                      <div className="font-display text-xl font-semibold">{modelStats?.total_predictions || 0}</div>
+                    </div>
+                    <div className="rounded-xl bg-muted/40 p-3">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                        <TrendingUp className="h-3.5 w-3.5" /> Avg Confidence
+                      </div>
+                      <div className="font-display text-xl font-semibold">{((modelStats?.average_confidence || 0) * 100).toFixed(1)}%</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Activate button */}
