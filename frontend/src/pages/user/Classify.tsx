@@ -47,6 +47,7 @@ export default function Classify() {
               : {},
             image_url: result.image_mri || preview,
             created_at: result.created_at || new Date().toISOString(),
+            models: result.models,
           },
         },
       });

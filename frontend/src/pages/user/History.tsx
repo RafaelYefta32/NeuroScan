@@ -29,6 +29,7 @@ export default function History() {
     async function fetchHistory() {
       if (!user) return;
       try {
+        await classificationService.healHistoryModelIds(user.id);
         const data = await classificationService.getHistory(user.id);
         setHistory(data);
       } catch (err) {
@@ -91,7 +92,8 @@ export default function History() {
                 confidence_score: it.confidence_score,
                 all_scores: it.explanation ? JSON.parse(it.explanation) : {},
                 image_url: it.image_mri,
-                created_at: it.created_at
+                created_at: it.created_at,
+                models: it.models,
               };
 
               return (

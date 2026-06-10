@@ -27,16 +27,92 @@ export interface UpdateProfileParams {
 }
 
 class UserService {
+  private getFriendlyAuthError(error: unknown, fallbackMessage: string): Error {
+    const rawMessage =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : fallbackMessage;
+
+    const normalizedMessage = rawMessage.toLowerCase();
+
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      return new Error("Tidak ada koneksi internet. Periksa jaringan lalu coba lagi.");
+    }
+
+    if (
+      normalizedMessage.includes("failed to fetch") ||
+      normalizedMessage.includes("network error") ||
+      normalizedMessage.includes("network request failed") ||
+      normalizedMessage.includes("fetch")
+    ) {
+      return new Error("Tidak ada koneksi internet. Periksa jaringan lalu coba lagi.");
+    }
+
+    if (
+      normalizedMessage.includes("invalid login credentials") ||
+      normalizedMessage.includes("email not found") ||
+      normalizedMessage.includes("wrong password") ||
+      normalizedMessage.includes("incorrect password") ||
+      normalizedMessage.includes("incorrect email")
+    ) {
+      return new Error("Email atau password salah.");
+    }
+
+    if (normalizedMessage.includes("email not confirmed")) {
+      return new Error("Email belum diverifikasi. Cek inbox atau folder spam lalu coba login lagi.");
+    }
+
+    if (
+      normalizedMessage.includes("user already registered") ||
+      normalizedMessage.includes("already been registered") ||
+      normalizedMessage.includes("already registered")
+    ) {
+      return new Error("Email sudah terdaftar. Silakan gunakan halaman login.");
+    }
+
+    if (
+      normalizedMessage.includes("password should be at least") ||
+      normalizedMessage.includes("password length") ||
+      normalizedMessage.includes("password must be")
+    ) {
+      return new Error("Password terlalu pendek. Gunakan password yang lebih kuat.");
+    }
+
+    if (
+      normalizedMessage.includes("invalid email") ||
+      normalizedMessage.includes("email address is invalid") ||
+      normalizedMessage.includes("unable to validate email address")
+    ) {
+      return new Error("Format email tidak valid. Periksa kembali alamat email Anda.");
+    }
+
+    if (normalizedMessage.includes("profile not found")) {
+      return new Error("Akun ditemukan, tetapi profil pengguna belum lengkap. Hubungi admin.");
+    }
+
+    if (normalizedMessage.includes("disabled")) {
+      return new Error("Akun Anda telah dinonaktifkan. Hubungi tim dukungan.");
+    }
+
+    return new Error(rawMessage || fallbackMessage);
+  }
+
   async login(
     email: string,
     password: string
   ): Promise<{ session: Session; roleId: number; status: string }> {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      throw new Error("Tidak ada koneksi internet. Periksa jaringan lalu coba lagi.");
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (error) throw new Error(error.message);
+    if (error) throw this.getFriendlyAuthError(error, "Gagal masuk. Silakan coba lagi.");
 
     const { data: profileData, error: profileError } = await supabase
       .from("users")
@@ -46,8 +122,9 @@ class UserService {
 
     if (!profileData) {
       await supabase.auth.signOut();
-      throw new Error(
-        `Profil tidak ditemukan. (${profileError?.message || "Diblokir oleh RLS / Data tidak ada"}). Hubungi admin.`
+      throw this.getFriendlyAuthError(
+        profileError || new Error("profile not found"),
+        "Akun ditemukan, tetapi profil pengguna belum lengkap. Hubungi admin."
       );
     }
 
@@ -70,12 +147,16 @@ class UserService {
   }
 
   async register(params: RegisterParams): Promise<string> {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      throw new Error("Tidak ada koneksi internet. Periksa jaringan lalu coba lagi.");
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email: params.email,
       password: params.password,
     });
 
-    if (error) throw new Error(error.message);
+    if (error) throw this.getFriendlyAuthError(error, "Registrasi gagal. Silakan coba lagi.");
     if (!data.user) throw new Error("Registrasi gagal. Silakan coba lagi.");
 
     const { error: dbError } = await supabase.from("users").insert([
@@ -97,6 +178,11 @@ class UserService {
       );
     } else {
       console.error("[UserService] Gagal menyimpan profil ke DB:", dbError);
+      await supabase.auth.signOut();
+      throw this.getFriendlyAuthError(
+        dbError,
+        "Registrasi gagal saat menyimpan profil pengguna. Coba lagi atau hubungi admin."
+      );
     }
 
     return data.user.id;
@@ -123,7 +209,7 @@ class UserService {
       })
       .eq("id", userId);
 
-    if (error) throw new Error(error.message);
+    if (error) throw this.getFriendlyAuthError(error, "Gagal memperbarui profil.");
   }
 
   async updatePassword(newPassword: string): Promise<void> {
@@ -131,7 +217,7 @@ class UserService {
       password: newPassword,
     });
 
-    if (error) throw new Error(error.message);
+    if (error) throw this.getFriendlyAuthError(error, "Gagal memperbarui password.");
   }
 
   async uploadAvatar(userId: string, file: File): Promise<string> {
@@ -142,7 +228,7 @@ class UserService {
       .from("profile picture")
       .upload(fileName, file, { upsert: true });
 
-    if (uploadError) throw new Error(uploadError.message);
+    if (uploadError) throw this.getFriendlyAuthError(uploadError, "Gagal mengunggah avatar.");
 
     const { data } = supabase.storage
       .from("profile picture")
@@ -155,7 +241,7 @@ class UserService {
       .update({ profile_image: publicUrl })
       .eq("id", userId);
 
-    if (updateError) throw new Error(updateError.message);
+    if (updateError) throw this.getFriendlyAuthError(updateError, "Gagal menyimpan avatar.");
 
     return publicUrl;
   }
@@ -171,7 +257,7 @@ class UserService {
       .update({ profile_image: null })
       .eq("id", userId);
 
-    if (error) throw new Error(error.message);
+    if (error) throw this.getFriendlyAuthError(error, "Gagal menghapus avatar.");
   }
   async getProfile(userId: string): Promise<UserProfile | null> {
     const { data, error } = await supabase

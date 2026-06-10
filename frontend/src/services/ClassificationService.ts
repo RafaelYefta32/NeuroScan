@@ -65,6 +65,13 @@ class ClassificationService {
       prediction,
     });
 
+    if (!result.models && activeModel) {
+      result.models = {
+        model_name: activeModel.model_name,
+        version: activeModel.version,
+      };
+    }
+
     await activityLogService.recordLog(
       userId,
       "MRI Scan Upload",
@@ -123,7 +130,7 @@ class ClassificationService {
       const { data, error } = await supabase
         .from("classification_results")
         .insert([insertPayload])
-        .select()
+        .select("*, models(model_name, version)")
         .single();
 
       if (error) {
@@ -146,6 +153,26 @@ class ClassificationService {
       confidence_score: params.prediction.confidence_score,
       explanation: JSON.stringify(params.prediction.all_scores),
     };
+  }
+
+  async healHistoryModelIds(userId: string): Promise<void> {
+    try {
+      const { data: models } = await supabase
+        .from("models")
+        .select("id")
+        .eq("is_active", true)
+        .limit(1);
+      const activeModelId = models && models.length > 0 ? models[0].id : null;
+      if (!activeModelId) return;
+
+      await supabase
+        .from("classification_results")
+        .update({ model_id: activeModelId })
+        .eq("user_id", userId)
+        .is("model_id", null);
+    } catch (e) {
+      console.error("[ClassificationService] Failed to heal history model IDs:", e);
+    }
   }
 
   async getHistory(userId: string): Promise<ClassificationResult[]> {

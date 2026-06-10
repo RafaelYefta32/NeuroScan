@@ -1,5 +1,5 @@
 import { Link, useLocation, Navigate } from "react-router-dom";
-import { ArrowLeft, Download, AlertTriangle, Activity, Stethoscope, BookOpen, Brain, MapPin, Microscope } from "lucide-react";
+import { ArrowLeft, Download, AlertTriangle, Activity, Stethoscope, BookOpen, Brain, MapPin, Microscope, Cpu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,8 @@ export default function Details() {
     return <Navigate to="/user/history" replace />;
   }
 
-  const { predicted_class, confidence_score, all_scores, image_url, created_at } = resultData;
+  const { predicted_class, confidence_score, all_scores, image_url, created_at, models } = resultData;
+  console.log("Details page resultData:", resultData);
   const formattedClass = predicted_class.charAt(0).toUpperCase() + predicted_class.slice(1);
   const confidencePercent = Math.round(confidence_score * 100);
 
@@ -38,6 +39,8 @@ export default function Details() {
     createdAt: created_at,
     userName: profile?.fullname || "Clinical Clinician",
     userEmail: user?.email || "-",
+    modelName: models?.model_name,
+    modelVersion: models?.version,
   };
 
 
@@ -132,11 +135,12 @@ export default function Details() {
               <Detail icon={<Activity className="h-4 w-4" />} label="Confidence" value={`${confidencePercent}%`} />
               <Detail icon={<Stethoscope className="h-4 w-4" />} label="Origin" value={predicted_class.toLowerCase() === "notumor" ? "N/A" : "Unknown"} />
               <Detail icon={<MapPin className="h-4 w-4" />} label="Scan date" value={scannedAt} />
+              <Detail icon={<Cpu className="h-4 w-4" />} label="Model engine" value={models ? `${models.model_name} (${models.version})` : "EfficientNet-B0 (v1.0)"} className="sm:col-span-2" />
             </div>
             <Separator className="my-5" />
             <p className="text-sm leading-relaxed text-muted-foreground">
               The model classifies this scan as <strong>{formattedClass}</strong> with a confidence of {confidencePercent}%.
-              This classification is based on patterns the model learned from training data.
+              This classification is based on patterns the <strong>{models?.model_name || "EfficientNet-B0"}</strong> model learned from training data.
               It does not determine tumor grade, exact location, size, or invasiveness.
               Further clinical evaluation and imaging by a radiologist are essential.
             </p>
@@ -194,9 +198,9 @@ export default function Details() {
   );
 }
 
-function Detail({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function Detail({ icon, label, value, className = "" }: { icon: React.ReactNode; label: string; value: string; className?: string }) {
   return (
-    <div className="rounded-lg border bg-muted/30 p-3">
+    <div className={`rounded-lg border bg-muted/30 p-3 ${className}`}>
       <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
         {icon}
         {label}

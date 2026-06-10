@@ -5,14 +5,12 @@ import { userService } from "@/services/UserService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 
 export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,7 +18,7 @@ export default function Login() {
     e.preventDefault();
     setError(null);
     if (!email || !password) {
-      setError("Please enter your email and password.");
+      setError("Silakan isi email dan password.");
       return;
     }
     setLoading(true);
@@ -34,7 +32,8 @@ export default function Login() {
         navigate("/user");
       }
     } catch (err: any) {
-      setError(err.message || "An unexpected error occurred.");
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan saat login. Silakan coba lagi.");
+    } finally {
       setLoading(false);
     }
   };

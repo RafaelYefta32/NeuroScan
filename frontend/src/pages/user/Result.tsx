@@ -16,7 +16,8 @@ export default function Result() {
     return <Navigate to="/user/classify" replace />;
   }
 
-  const { predicted_class, confidence_score, all_scores, image_url, created_at } = resultData;
+  const { predicted_class, confidence_score, all_scores, image_url, created_at, models } = resultData;
+  console.log("Result page resultData:", resultData);
   const confidencePercent = Math.round(confidence_score * 100);
 
   const formattedClass = predicted_class.charAt(0).toUpperCase() + predicted_class.slice(1);
@@ -34,6 +35,8 @@ export default function Result() {
       createdAt: created_at,
       userName: profile?.fullname || "Clinical Clinician",
       userEmail: user?.email || "-",
+      modelName: models?.model_name,
+      modelVersion: models?.version,
     });
   };
 

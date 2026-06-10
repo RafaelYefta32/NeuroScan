@@ -29,12 +29,12 @@ export default function Register() {
 
   const validate = (): FieldErrors => {
     const next: FieldErrors = {};
-    if (!fullName.trim()) next.fullName = "Full name is required.";
-    if (!email.trim()) next.email = "Email is required.";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "Enter a valid email address.";
-    if (!password) next.password = "Password is required.";
-    else if (password.length < 8) next.password = "Password must be at least 8 characters.";
-    if (confirmPassword !== password) next.confirmPassword = "Passwords do not match.";
+    if (!fullName.trim()) next.fullName = "Nama lengkap wajib diisi.";
+    if (!email.trim()) next.email = "Email wajib diisi.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "Masukkan alamat email yang valid.";
+    if (!password) next.password = "Password wajib diisi.";
+    else if (password.length < 8) next.password = "Password minimal 8 karakter.";
+    if (confirmPassword !== password) next.confirmPassword = "Konfirmasi password tidak cocok.";
     return next;
   };
 
@@ -58,7 +58,7 @@ export default function Register() {
       setSuccess(true);
       setTimeout(() => navigate("/"), 2000);
     } catch (err: any) {
-      setAuthError(err.message || "Failed to register. Please try again.");
+      setAuthError(err instanceof Error ? err.message : "Terjadi kesalahan saat registrasi. Silakan coba lagi.");
     } finally {
       setLoading(false);
     }
