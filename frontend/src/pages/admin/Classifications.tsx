@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Eye, Search, Download, Loader2, Brain, User, CalendarDays, BarChart3 } from "lucide-react";
+import { Eye, Search, Download, Loader2, Brain, User, CalendarDays, BarChart3, Cpu } from "lucide-react";
 import { format } from "date-fns";
 import { PaginationBar } from "@/components/ui/pagination-bar";
 
@@ -47,14 +47,14 @@ function ClassificationDetailDialog({ item, onClose }: { item: Classification | 
 
   return (
     <Dialog open={!!item} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Brain className="h-5 w-5 text-primary" />
             Scan Detail — SC-{item.id}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-5">
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
           {item.image_mri && !item.image_mri.includes("placeholder") && (
             <div className="overflow-hidden rounded-xl border border-border">
               <img src={item.image_mri} alt="MRI Scan" className="w-full max-h-56 object-contain bg-black/5" />
@@ -105,6 +105,21 @@ function ClassificationDetailDialog({ item, onClose }: { item: Classification | 
               <div className="font-medium">{format(new Date(item.created_at), "MMM d, yyyy")}</div>
               <div className="text-xs text-muted-foreground">{format(new Date(item.created_at), "HH:mm:ss")}</div>
             </div>
+          </div>
+          <div className="rounded-xl bg-muted/40 p-3 text-sm">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+              <Cpu className="h-3.5 w-3.5" /> Model Used
+            </div>
+            {item.models ? (
+              <div className="flex items-center justify-between">
+                <span className="font-medium">{item.models.model_name}</span>
+                <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                  {item.models.version}
+                </span>
+              </div>
+            ) : (
+              <span className="text-muted-foreground italic">No model data available</span>
+            )}
           </div>
         </div>
       </DialogContent>

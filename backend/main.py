@@ -36,7 +36,7 @@ classification_service = ClassificationService(
     activity_log_service=activity_log_service,
 )
 
-from routers import model_router, predict_router
+from routers import model_router, predict_router, user_router
 from routers.model_router import init_router as init_model_router
 from routers.predict_router import init_router as init_predict_router
 
@@ -63,6 +63,8 @@ app.add_middleware(
 app.include_router(model_router)
 
 app.include_router(predict_router)
+
+app.include_router(user_router)
 
 @app.on_event("startup")
 async def startup_event():

@@ -70,7 +70,7 @@ export default function UserHome() {
       {/* Explanation */}
       <section className="grid gap-6 md:grid-cols-3">
         {[
-          { icon: FileScan, title: "1. Upload MRI", text: "Drag & drop a T1/T2 axial scan. JPG, PNG or DICOM." },
+          { icon: FileScan, title: "1. Upload MRI", text: "Drag & drop a MRI scan. JPG or PNG." },
           { icon: Brain, title: "2. AI Analysis", text: "Our deep learning model evaluates tissue patterns in seconds." },
           { icon: Shield, title: "3. Get a Report", text: "Receive a calibrated diagnosis with downloadable PDF." },
         ].map((s) => (

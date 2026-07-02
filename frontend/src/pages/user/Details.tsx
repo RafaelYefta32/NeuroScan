@@ -22,13 +22,13 @@ export default function Details() {
   const { predicted_class, confidence_score, all_scores, image_url, created_at, models } = resultData;
   console.log("Details page resultData:", resultData);
   const formattedClass = predicted_class.charAt(0).toUpperCase() + predicted_class.slice(1);
-  const confidencePercent = Math.round(confidence_score * 100);
+  const confidencePercent = (confidence_score * 100).toFixed(2);
 
   const scannedAt = created_at 
     ? format(new Date(created_at), "MMM d, yyyy · HH:mm")
     : "Just now";
   const probabilities = Object.entries(all_scores || {})
-    .map(([key, val]) => ({ name: key.charAt(0).toUpperCase() + key.slice(1), v: Math.round((val as number) * 100) }))
+    .map(([key, val]) => ({ name: key.charAt(0).toUpperCase() + key.slice(1), v: parseFloat(((val as number) * 100).toFixed(2)), vLabel: ((val as number) * 100).toFixed(2) }))
     .sort((a, b) => b.v - a.v);
 
   const reportPayload = {
@@ -100,7 +100,7 @@ export default function Details() {
                 <div key={c.name} className="space-y-1">
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">{c.name}</span>
-                    <span className="font-medium">{c.v}%</span>
+                    <span className="font-medium">{c.vLabel}%</span>
                   </div>
                   <Progress value={c.v} className="h-1.5" />
                 </div>
@@ -128,7 +128,7 @@ export default function Details() {
           <Card className="p-6">
             <div className="flex items-center gap-2">
               <Microscope className="h-5 w-5 text-primary" />
-              <h3 className="font-display text-lg font-semibold">Tumor characteristics</h3>
+              <h3 className="font-display text-lg font-semibold">Classification Details</h3>
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Detail icon={<Brain className="h-4 w-4" />} label="Predicted class" value={formattedClass} />

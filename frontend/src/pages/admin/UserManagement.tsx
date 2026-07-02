@@ -10,13 +10,14 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MoreHorizontal, Search, Plus, Loader2 } from "lucide-react";
+import { MoreHorizontal, Search, Plus, Loader2, Trash2, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { PaginationBar } from "@/components/ui/pagination-bar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -25,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 
 interface DBUser {
@@ -36,6 +38,7 @@ interface DBUser {
   profession: string | null;
   status: string;
   profile_image: string | null;
+  classificationCount?: number;
 }
 
 export default function UserManagement() {
@@ -67,18 +70,44 @@ export default function UserManagement() {
     role_id: 2,
   });
 
+  // Delete state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<DBUser | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const [currentPage, setCurrentPage] = useState(1);
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // Fetch all users
+      const { data: usersData, error: usersError } = await supabase
         .from("users")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setUsers(data || []);
+      if (usersError) throw usersError;
+
+      // Fetch classification counts per user
+      const { data: classData, error: classError } = await supabase
+        .from("classification_results")
+        .select("user_id");
+
+      if (classError) throw classError;
+
+      // Build a map: user_id -> count
+      const countMap: Record<string, number> = {};
+      (classData || []).forEach((row: { user_id: string }) => {
+        countMap[row.user_id] = (countMap[row.user_id] || 0) + 1;
+      });
+
+      // Merge classification count into users
+      const enrichedUsers: DBUser[] = (usersData || []).map((u: DBUser) => ({
+        ...u,
+        classificationCount: countMap[u.id] || 0,
+      }));
+
+      setUsers(enrichedUsers);
     } catch (err: any) {
       toast.error(err.message || "Failed to load users");
     } finally {
@@ -156,6 +185,45 @@ export default function UserManagement() {
       toast.error(err.message || "Failed to update user");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openDeleteModal = (user: DBUser) => {
+    setDeletingUser(user);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deletingUser) return;
+    setDeleting(true);
+    try {
+      // Panggil backend endpoint yang menggunakan service role key (bypass RLS)
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+      const response = await fetch(`${backendUrl}/admin/users/${deletingUser.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || `Server error: ${response.status}`);
+      }
+
+      // Log activity
+      if (currentUser) {
+        await supabase.from("activity_logs").insert([{
+          user_id: currentUser.id,
+          activity: "User Deleted",
+          description: `Deleted user account: ${deletingUser.fullname || deletingUser.email || deletingUser.id}`
+        }]);
+      }
+
+      setUsers(users.filter(u => u.id !== deletingUser.id));
+      toast.success(`User "${deletingUser.fullname || deletingUser.email}" berhasil dihapus.`);
+      setIsDeleteDialogOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Gagal menghapus user");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -292,72 +360,101 @@ export default function UserManagement() {
                 <TableHead>User</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Classifications</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center">
+                  <TableCell colSpan={5} className="h-24 text-center">
                     <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               ) : filteredUsers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                     No users found.
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedUsers.map((u) => (
-                  <TableRow key={u.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={u.profile_image || undefined} className="object-cover" />
-                          <AvatarFallback className="bg-primary-soft text-primary text-xs">
-                            {u.fullname ? u.fullname.substring(0, 2).toUpperCase() : "U"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="font-medium">{u.fullname || "Unknown User"}</div>
-                          <div className="text-xs text-muted-foreground">{u.email || "No email available"}</div>
+                paginatedUsers.map((u) => {
+                  const hasClassifications = (u.classificationCount ?? 0) > 0;
+                  const isSelf = currentUser?.id === u.id;
+                  return (
+                    <TableRow key={u.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-9 w-9">
+                            <AvatarImage src={u.profile_image || undefined} className="object-cover" />
+                            <AvatarFallback className="bg-primary-soft text-primary text-xs">
+                              {u.fullname ? u.fullname.substring(0, 2).toUpperCase() : "U"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-medium">{u.fullname || "Unknown User"}</div>
+                            <div className="text-xs text-muted-foreground">{u.email || "No email available"}</div>
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{u.role_id === 1 ? "Admin" : "User"}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={
-                          (u.status || "active") === "active"
-                            ? "bg-success/15 text-success"
-                            : "bg-muted text-muted-foreground"
-                        }
-                      >
-                        {u.status || "active"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEditModal(u)}>
-                            Edit user
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleToggleStatus(u.id, u.status || "active", u.fullname)}>
-                            {u.status === "active" ? "Disable user" : "Enable user"}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{u.role_id === 1 ? "Admin" : "User"}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={
+                            (u.status || "active") === "active"
+                              ? "bg-success/15 text-success"
+                              : "bg-muted text-muted-foreground"
+                          }
+                        >
+                          {u.status || "active"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className={`text-sm font-medium ${hasClassifications ? "text-foreground" : "text-muted-foreground"}`}>
+                          {u.classificationCount ?? 0}
+                          {hasClassifications && (
+                            <span className="ml-1 text-xs text-muted-foreground">scan(s)</span>
+                          )}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditModal(u)}>
+                              Edit user
+                            </DropdownMenuItem>
+                            {!isSelf && (
+                              <DropdownMenuItem
+                                onClick={() => handleToggleStatus(u.id, u.status || "active", u.fullname)}
+                              >
+                                {u.status === "active" ? "Disable user" : "Enable user"}
+                              </DropdownMenuItem>
+                            )}
+                            {!isSelf && !hasClassifications && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                                  onClick={() => openDeleteModal(u)}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete user
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -490,8 +587,7 @@ export default function UserManagement() {
               <Label>Role</Label>
               <Select 
                 value={addForm.role_id.toString()} 
-                onValueChange={(val) => setAddForm({ ...addForm, role_id: parseInt(val) })}
-              >
+                onValueChange={(val) => setAddForm({ ...addForm, role_id: parseInt(val) })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -508,6 +604,65 @@ export default function UserManagement() {
             </Button>
             <Button className="bg-gradient-primary" onClick={handleAddUser} disabled={addingUser}>
               {addingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Create User"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete User Account
+            </DialogTitle>
+            <DialogDescription>
+              This action is irreversible. The user's account and all associated data will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+
+          {deletingUser && (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={deletingUser.profile_image || undefined} className="object-cover" />
+                  <AvatarFallback className="bg-primary-soft text-primary text-xs">
+                    {deletingUser.fullname ? deletingUser.fullname.substring(0, 2).toUpperCase() : "U"}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <div className="font-semibold">{deletingUser.fullname || "Unknown User"}</div>
+                  <div className="text-xs text-muted-foreground">{deletingUser.email}</div>
+                </div>
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground">
+                This user has{" "}
+                <span className="font-semibold text-foreground">
+                  {deletingUser.classificationCount ?? 0} classification(s)
+                </span>
+                . Since they have no classification history, this account can be safely deleted.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteUser}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete User
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -85,7 +85,7 @@ export default function History() {
           <>
             {paginated.map((it) => {
               const formattedClass = it.predicted_class.charAt(0).toUpperCase() + it.predicted_class.slice(1);
-              const conf = Math.round(it.confidence_score * 100);
+              const conf = (it.confidence_score * 100).toFixed(2);
               
               const resultState = {
                 predicted_class: it.predicted_class,

@@ -17,13 +17,13 @@ export interface ExplanationData {
  */
 export function generateClinicalExplanation(data: ExplanationData) {
   const { predictedClass, confidenceScore, allScores } = data;
-  const confidencePercent = Math.round(confidenceScore * 100);
+  const confidencePercent = (confidenceScore * 100).toFixed(2);
   const clsLower = predictedClass.toLowerCase().replace(/[^a-z]/g, "");
 
   // Urutkan kelas lainnya untuk differential diagnosis
   const sortedOthers = Object.entries(allScores)
     .filter(([name]) => name.toLowerCase().replace(/[^a-z]/g, "") !== clsLower)
-    .map(([name, val]) => ({ name, val: Math.round(val * 100) }))
+    .map(([name, val]) => ({ name, val: parseFloat((val * 100).toFixed(2)), vLabel: (val * 100).toFixed(2) }))
     .sort((a, b) => b.val - a.val);
 
 
@@ -107,7 +107,7 @@ export function generateClinicalExplanation(data: ExplanationData) {
       <p class="border-l-2 border-amber-500 pl-3 bg-amber-50/40 py-1">
         <strong>Analisis Tambahan:</strong> 
         Selain prediksi utama <strong>${predictedClass}</strong>, model juga memberikan probabilitas sebesar 
-        <strong>${highestAlternative.val}%</strong> terhadap kelas 
+        <strong>${highestAlternative.vLabel}%</strong> terhadap kelas 
         <strong>${highestAlternative.name}</strong>. 
         Hal ini menunjukkan adanya kemiripan fitur visual tertentu antar kelas pada citra MRI yang dianalisis.
       </p>
@@ -208,7 +208,7 @@ export function printMedicalReport(data: ExplanationData) {
   const reportId = `REP-${Math.floor(100000 + Math.random() * 900000)}`;
 
   const sortedScores = Object.entries(allScores)
-    .map(([name, val]) => ({ name, val: Math.round(val * 100) }))
+    .map(([name, val]) => ({ name, val: parseFloat((val * 100).toFixed(2)), vLabel: (val * 100).toFixed(2) }))
     .sort((a, b) => b.val - a.val);
 
   const clinicalDescriptionHTML = generateClinicalExplanation(data);
@@ -413,7 +413,7 @@ export function printMedicalReport(data: ExplanationData) {
               <div class="score-row">
                 <div style="display: flex; justify-content: space-between; font-size: 13px;">
                   <span>${s.name}</span>
-                  <strong>${s.val}%</strong>
+                  <strong>${s.vLabel}%</strong>
                 </div>
                 <div class="score-bar-bg">
                   <div class="score-bar-fill" style="width: ${s.val}%; background-color: ${
