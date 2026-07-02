@@ -17,7 +17,8 @@ export interface ExplanationData {
  */
 export function generateClinicalExplanation(data: ExplanationData) {
   const { predictedClass, confidenceScore, allScores } = data;
-  const confidencePercent = (confidenceScore * 100).toFixed(2);
+  const confidencePercent = parseFloat((confidenceScore * 100).toFixed(2)); // number for comparisons
+  const confidenceLabel = confidencePercent.toFixed(2);                     // string for display
   const clsLower = predictedClass.toLowerCase().replace(/[^a-z]/g, "");
 
   // Urutkan kelas lainnya untuk differential diagnosis
@@ -45,7 +46,7 @@ export function generateClinicalExplanation(data: ExplanationData) {
     <div class="space-y-4 text-sm text-slate-700 leading-relaxed">
       <p>
         Berdasarkan analisis deep learning terhadap citra MRI kepala yang diunggah, sistem mengklasifikasikan kasus ini sebagai 
-        <strong>${predictedClass}</strong> dengan tingkat kepercayaan <strong>${confidencePercent}%</strong>. 
+        <strong>${predictedClass}</strong> dengan tingkat kepercayaan <strong>${confidenceLabel}%</strong>. 
         Hasil ini ${diagnosticClarity}
       </p>
   `;

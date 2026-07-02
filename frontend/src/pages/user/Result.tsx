@@ -18,7 +18,8 @@ export default function Result() {
 
   const { predicted_class, confidence_score, all_scores, image_url, created_at, models } = resultData;
   console.log("Result page resultData:", resultData);
-  const confidencePercent = (confidence_score * 100).toFixed(2);
+  const confidencePercent = parseFloat((confidence_score * 100).toFixed(2)); // number for Progress
+  const confidenceLabel = confidencePercent.toFixed(2);                      // string for display
 
   const formattedClass = predicted_class.charAt(0).toUpperCase() + predicted_class.slice(1);
 
@@ -63,7 +64,7 @@ export default function Result() {
             <div className="mt-6 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Confidence</span>
-                <span className="font-semibold text-foreground">{confidencePercent}%</span>
+                <span className="font-semibold text-foreground">{confidenceLabel}%</span>
               </div>
               <Progress value={confidencePercent} className="h-2" />
             </div>
