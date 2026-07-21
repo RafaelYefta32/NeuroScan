@@ -1,15 +1,4 @@
----
-title: NeuroScan API
-emoji: 🧠
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-pinned: false
-short_description: FastAPI backend untuk klasifikasi tumor otak MRI
----
-
 # NeuroScan Backend API
-
 
 This is the Python FastAPI backend for the NeuroScan MRI Classification system.
 
