@@ -1,3 +1,15 @@
+---
+title: NeuroScan API
+emoji: 🧠
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: 5.0.0
+app_file: app.py
+pinned: false
+short_description: FastAPI backend untuk klasifikasi tumor otak MRI
+---
+
 # NeuroScan Backend API
 
 This is the Python FastAPI backend for the NeuroScan MRI Classification system.
