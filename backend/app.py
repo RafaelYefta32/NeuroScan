@@ -1,10 +1,10 @@
 """
 Entry point untuk HuggingFace Spaces (sdk: gradio).
-Menggabungkan FastAPI backend dengan Gradio UI agar bisa berjalan
-di HuggingFace Spaces gratis (tanpa Docker berbayar).
+Gunakan demo.launch() agar ZeroGPU tidak langsung shutdown.
 """
-import uvicorn
 import gradio as gr
+from fastapi.middleware.cors import CORSMiddleware
+import os
 
 # Import FastAPI app beserta semua routes dan middleware dari main.py
 from main import app as fastapi_app
@@ -30,17 +30,25 @@ with gr.Blocks(
         |--------|----------|-----------|
         | `POST` | `/predict` | Klasifikasi gambar MRI |
         | `GET` | `/models` | Daftar model tersedia |
-        | `GET` | `/health` | Health check |
 
         ---
         *Dibangun dengan FastAPI + TensorFlow*
         """
     )
 
-# Mount Gradio UI ke dalam FastAPI app di path "/"
-# FastAPI endpoints tetap bisa diakses di path masing-masing (/predict, /docs, dll)
-app = gr.mount_gradio_app(fastapi_app, demo, path="/ui")
+# Launch Gradio (prevent_thread_lock agar bisa tambah routes dulu)
+gradio_server, _, _ = demo.launch(
+    server_port=7860,
+    server_name="0.0.0.0",
+    prevent_thread_lock=True,
+)
 
-if __name__ == "__main__":
-    # HuggingFace Spaces membutuhkan port 7860
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+# Mount semua router FastAPI ke server Gradio
+from routers import model_router, predict_router, user_router
+gradio_server.include_router(predict_router)
+gradio_server.include_router(model_router)
+gradio_server.include_router(user_router)
+
+# Blok thread agar server tetap berjalan (tidak langsung exit)
+demo.block_thread()
+
