@@ -18,6 +18,11 @@ DEFAULT_IMAGE_SIZE = (224, 224)
 LOCAL_MODEL_DIR = "models"
 FALLBACK_MODEL_PATH = "models/efficientnetB0.keras"
 
+# HuggingFace Hub: repo tempat model .keras disimpan
+# Set via env var HF_MODEL_REPO, contoh: "RafaelYefta/neuroscan-models"
+HF_MODEL_REPO = os.environ.get("HF_MODEL_REPO", "")
+HF_TOKEN = os.environ.get("HF_TOKEN", "")  # Untuk private repo (opsional)
+
 
 class ModelService:
 
@@ -38,6 +43,34 @@ class ModelService:
 
     def is_model_loaded(self) -> bool:
         return self._current_model is not None
+
+    def _download_from_hf_hub(self, filename: str) -> str:
+        """Download model dari HuggingFace Hub jika belum ada secara lokal."""
+        os.makedirs(LOCAL_MODEL_DIR, exist_ok=True)
+        local_path = os.path.join(LOCAL_MODEL_DIR, os.path.basename(filename))
+
+        if os.path.exists(local_path):
+            logger.info(f"Model sudah ada di cache lokal: {local_path}")
+            return local_path
+
+        if not HF_MODEL_REPO:
+            logger.warning("HF_MODEL_REPO tidak dikonfigurasi, skip download dari HF Hub.")
+            return local_path
+
+        try:
+            from huggingface_hub import hf_hub_download
+            logger.info(f"Mendownload model dari HF Hub: {HF_MODEL_REPO}/{os.path.basename(filename)}")
+            downloaded = hf_hub_download(
+                repo_id=HF_MODEL_REPO,
+                filename=os.path.basename(filename),
+                token=HF_TOKEN or None,
+                local_dir=LOCAL_MODEL_DIR,
+            )
+            logger.info(f"Model berhasil didownload ke: {downloaded}")
+            return downloaded
+        except Exception as e:
+            logger.error(f"Gagal download model dari HF Hub: {e}")
+            return local_path
 
     def upload_model(self, file_obj, filename: str) -> str:
         os.makedirs(LOCAL_MODEL_DIR, exist_ok=True)
@@ -74,10 +107,11 @@ class ModelService:
                         f"v{active_record.version} | path: {active_record.file_path}"
                     )
 
-                    if os.path.exists(active_record.file_path):
-                        self._current_model = tf.keras.models.load_model(
-                            active_record.file_path
-                        )
+                    # Coba download dari HF Hub jika file tidak ada lokal
+                    local_path = self._download_from_hf_hub(active_record.file_path)
+
+                    if os.path.exists(local_path):
+                        self._current_model = tf.keras.models.load_model(local_path)
                         self._set_image_size_from_model()
                         logger.info(
                             "Model aktif berhasil dimuat ke memori! "
@@ -86,17 +120,19 @@ class ModelService:
                         return True
                     else:
                         logger.warning(
-                            f"File model tidak ditemukan di: {active_record.file_path}. "
+                            f"File model tidak ditemukan di: {local_path}. "
                             "Beralih ke fallback."
                         )
 
             except Exception as e:
                 logger.error(f"Gagal mengambil model dari Supabase: {e}")
 
-        logger.info(f"Mencoba memuat model fallback: {FALLBACK_MODEL_PATH}")
+        # Coba download fallback dari HF Hub juga
+        fallback_local = self._download_from_hf_hub(FALLBACK_MODEL_PATH)
+        logger.info(f"Mencoba memuat model fallback: {fallback_local}")
         try:
-            if os.path.exists(FALLBACK_MODEL_PATH):
-                self._current_model = tf.keras.models.load_model(FALLBACK_MODEL_PATH)
+            if os.path.exists(fallback_local):
+                self._current_model = tf.keras.models.load_model(fallback_local)
                 self._set_image_size_from_model()
                 logger.info(
                     "Model fallback lokal berhasil dimuat! "
