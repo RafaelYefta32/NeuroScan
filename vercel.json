@@ -1,0 +1,18 @@
+{
+  "services": [
+    {
+      "src": "frontend",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    },
+    {
+      "src": "backend",
+      "use": "@vercel/python",
+      "config": {
+        "entrypoint": "backend/main.py"
+      }
+    }
+  ]
+}

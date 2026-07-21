@@ -7,7 +7,9 @@ from dotenv import load_dotenv
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-load_dotenv(dotenv_path="../frontend/.env.local")
+# Membaca dari .env di folder backend/ (untuk development lokal)
+# Di Vercel, env vars dikonfigurasi langsung di dashboard
+load_dotenv()
 
 from supabase import create_client, Client
 
@@ -52,9 +54,16 @@ app = FastAPI(
     version="2.0.0",
 )
 
+# CORS: Baca daftar origin dari env var ALLOWED_ORIGINS (koma-separated)
+# Contoh di Vercel: ALLOWED_ORIGINS=https://neuroscan.vercel.app,https://www.neuroscan.com
+_raw_origins = os.environ.get("ALLOWED_ORIGINS", "")
+_allowed_origins = [
+    o.strip() for o in _raw_origins.split(",") if o.strip()
+] if _raw_origins else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
